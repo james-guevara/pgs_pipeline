@@ -1,2 +1,2 @@
 # pgs_pipeline
-Snakemake pipeline for converting VCF to PLINK and applying filtering
+Pipeline for running PGS, KING, and PCA.
