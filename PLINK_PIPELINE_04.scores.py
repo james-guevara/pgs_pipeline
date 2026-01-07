@@ -57,10 +57,11 @@ def main():
         out_prefix = out_dir / trait
 
         print(f"[Running] {trait}")
+        # SBayesRC .snpRes format: col 2=Name(rsID), col 5=A1, col 8=A1Effect
         run([
             "plink2",
             "--pfile", str(pfile_prefix),
-            "--score", str(score_file), "1", "2", "3", "header", "center", "list-variants", "no-mean-imputation",
+            "--score", str(score_file), "2", "5", "8", "header", "center", "list-variants", "no-mean-imputation",
             "--threads", str(threads),
             "--memory", str(memory),
             "--out", str(out_prefix)
