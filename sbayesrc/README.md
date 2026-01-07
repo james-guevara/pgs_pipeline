@@ -34,13 +34,12 @@ sbatch run_sbayesrc.sh
 
 - Input: `input/*.ma` (COJO format from sumstats wrangling)
 - Intermediate: `output/tidy/*.imputed.ma`
-- Output: `output/weights/*.txt` (SNP weights for PRS calculation)
+- Output: `output/weights/*.snpRes` (SNP weights for PRS calculation)
 
 ## Known Issues
 
-**AFB (afb_2018.ma)**: Script fails when no imputation is needed (all SNPs
-already in LD reference). Fix: modify script to handle "No SNP needs to be
-imputed" case - either skip to Step 2 with original file, or copy to .imputed.ma.
+**Output format**: Uses `gctb` native output (`.snpRes`) which has more columns
+than the `sbayesrc` R wrapper (`.txt`). Key column for PGS is `A1Effect`.
 
 **PTSD (ptsd_2024.ma)**: Segfaults during imputation at LD block 300 (chr8)
 regardless of memory (48G, 96G, 128G). Previous PTSD runs used different

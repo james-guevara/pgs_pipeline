@@ -115,7 +115,7 @@ singularity exec --bind /expanse/projects/sebat1 "$SIF" \
          --out "${WEIGHTS_DIR}/${NAME}" \
          --thread "${SLURM_CPUS_PER_TASK}"
 
-if [[ ! -f "${WEIGHTS_DIR}/${NAME}.txt" ]]; then
+if [[ ! -f "${WEIGHTS_DIR}/${NAME}.snpRes" ]]; then
     echo "[$(date)] ERROR: SBayesRC failed"
     exit 1
 fi
@@ -127,5 +127,5 @@ echo ""
 echo "========================================"
 echo "COMPLETE: ${NAME}"
 echo "End:      $(date)"
-echo "Output:   ${WEIGHTS_DIR}/${NAME}.txt"
+echo "Output:   ${WEIGHTS_DIR}/${NAME}.snpRes"
 echo "========================================"
