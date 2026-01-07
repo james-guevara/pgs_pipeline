@@ -3,6 +3,8 @@ import subprocess
 from pathlib import Path
 import argparse
 
+from config import load_config, get
+
 
 def run(cmd):
     """Run and print shell commands."""
@@ -11,13 +13,20 @@ def run(cmd):
 
 
 def main():
+    cfg = load_config()
+
     parser = argparse.ArgumentParser(description="Run PLINK2 missingness QC + filtering.")
-    parser.add_argument("--dir", type=Path, default=Path("03_maf"),
-                        help="Directory containing per-chromosome .pgen/.psam/.pvar files (default: 03_maf)")
-    parser.add_argument("--out-dir", type=Path, default=Path("04_missingness"),
-                        help="Output directory for missingness results (default: 04_missingness)")
-    parser.add_argument("--memory", type=int, default=4000)
-    parser.add_argument("--threads", type=int, default=1)
+    parser.add_argument("--config", type=Path, help="Path to config.toml")
+    parser.add_argument("--dir", type=Path, default=Path(get(cfg, "directories", "maf")),
+                        help="Directory containing per-chromosome .pgen/.psam/.pvar files")
+    parser.add_argument("--out-dir", type=Path, default=Path(get(cfg, "directories", "missingness")),
+                        help="Output directory for missingness results")
+    parser.add_argument("--memory", type=int, default=get(cfg, "defaults", "memory"))
+    parser.add_argument("--threads", type=int, default=get(cfg, "defaults", "threads"))
+    parser.add_argument("--sample-miss", type=float, default=get(cfg, "filters", "sample_miss"),
+                        help="Sample missingness threshold")
+    parser.add_argument("--variant-miss", type=float, default=get(cfg, "filters", "variant_miss"),
+                        help="Variant missingness threshold")
     args = parser.parse_args()
 
     input_dir = args.dir
@@ -61,12 +70,12 @@ def main():
     fail_samples = out_dir / "fail_samples.txt"
     fail_variants = out_dir / "fail_variants.txt"
 
-    subprocess.run(f"awk 'NR>1 && $4>0.05 {{print $1}}' {smiss} > {fail_samples}", shell=True, check=True)
-    subprocess.run(f"awk 'NR>1 && $5>0.05 {{print $2}}' {vmiss} > {fail_variants}", shell=True, check=True)
+    subprocess.run(f"awk 'NR>1 && $4>{args.sample_miss} {{print $1}}' {smiss} > {fail_samples}", shell=True, check=True)
+    subprocess.run(f"awk 'NR>1 && $5>{args.variant_miss} {{print $2}}' {vmiss} > {fail_variants}", shell=True, check=True)
 
     nsamp_proc = subprocess.run(f"wc -l < {fail_samples}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     nsamp = int(nsamp_proc.stdout.decode().strip() or 0)
-    
+
     nvar_proc = subprocess.run(f"wc -l < {fail_variants}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     nvar = int(nvar_proc.stdout.decode().strip() or 0)
 

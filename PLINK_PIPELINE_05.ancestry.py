@@ -3,6 +3,8 @@ import subprocess
 from pathlib import Path
 import argparse
 
+from config import load_config, get
+
 
 def run(cmd):
     """Run and print shell commands."""
@@ -29,7 +31,7 @@ def maf_filter(merged, out_dir, cohort, maf, threads, memory):
     return out_prefix
 
 
-def ld_prune(maf_prefix, out_dir, cohort, threads, memory):
+def ld_prune(maf_prefix, out_dir, cohort, ld_window, ld_step, ld_r2, threads, memory):
     """Perform LD pruning and extract pruned SNPs."""
     prune_base = Path(out_dir) / cohort
     pruned_prefix = Path(out_dir) / f"{cohort}_pruned"
@@ -38,7 +40,7 @@ def ld_prune(maf_prefix, out_dir, cohort, threads, memory):
     run([
         "plink2",
         "--pfile", str(maf_prefix),
-        "--indep-pairwise", "200", "50", "0.1",
+        "--indep-pairwise", str(ld_window), str(ld_step), str(ld_r2),
         "--out", str(prune_base),
         "--threads", str(threads),
         "--memory", str(memory),
@@ -129,19 +131,21 @@ def pca_analysis(pruned_prefix, keep_file, out_dir, cohort, threads, memory, num
 # -------------------------------------------------------------------------
 # Main orchestration
 # -------------------------------------------------------------------------
-def ancestry_pipeline(merged_prefix, cohort, maf, king_cutoff, num_pcs, threads, memory):
+def ancestry_pipeline(cfg, merged_prefix, cohort, maf, king_cutoff, num_pcs,
+                      ld_window, ld_step, ld_r2, threads, memory):
     """Full ancestry analysis pipeline from merged pfile."""
     merged = Path(merged_prefix)
 
-    maf_dir = Path("06_maf")
-    prune_dir = Path("07_prune")
-    rel_dir = Path("08_relatedness")
-    pca_dir = Path("09_pca")
+    # Get directory names from config
+    maf_dir = Path(get(cfg, "directories", "ancestry_maf"))
+    prune_dir = Path(get(cfg, "directories", "ancestry_prune"))
+    rel_dir = Path(get(cfg, "directories", "ancestry_relatedness"))
+    pca_dir = Path(get(cfg, "directories", "ancestry_pca"))
     for d in (maf_dir, prune_dir, rel_dir, pca_dir):
         d.mkdir(exist_ok=True)
 
     maf_prefix = maf_filter(merged, maf_dir, cohort, maf, threads, memory)
-    pruned_prefix = ld_prune(maf_prefix, prune_dir, cohort, threads, memory)
+    pruned_prefix = ld_prune(maf_prefix, prune_dir, cohort, ld_window, ld_step, ld_r2, threads, memory)
     king_prefix, keep_file = king_relatedness(pruned_prefix, rel_dir, cohort, king_cutoff, threads, memory)
     ref_prefix, proj_prefix = pca_analysis(pruned_prefix, keep_file, pca_dir, cohort, threads, memory, num_pcs)
 
@@ -155,22 +159,37 @@ def ancestry_pipeline(merged_prefix, cohort, maf, king_cutoff, num_pcs, threads,
 
 
 def main():
+    cfg = load_config()
+
     parser = argparse.ArgumentParser(description="Run ancestry pipeline (MAF → prune → KING → PCA).")
+    parser.add_argument("--config", type=Path, help="Path to config.toml")
     parser.add_argument("--merged-prefix", required=True, help="Prefix of merged pfile (e.g., 05_summary/cohort).")
-    parser.add_argument("--cohort", default="cohort", help="Cohort name (default: cohort)")
-    parser.add_argument("--maf", type=float, default=0.05, help="MAF threshold (default: 0.05)")
-    parser.add_argument("--king-cutoff", type=float, default=0.0884, help="KING cutoff (default: 0.0884)")
-    parser.add_argument("--num-pcs", type=int, default=10, help="Number of PCs (default: 10)")
-    parser.add_argument("--threads", type=int, default=8, help="Threads (default: 8)")
-    parser.add_argument("--memory", type=int, default=16000, help="Memory (MB, default: 16000)")
+    parser.add_argument("--cohort", default="cohort", help="Cohort name")
+    parser.add_argument("--maf", type=float, default=get(cfg, "ancestry", "maf"), help="MAF threshold")
+    parser.add_argument("--king-cutoff", type=float, default=get(cfg, "ancestry", "king_cutoff"),
+                        help="KING cutoff")
+    parser.add_argument("--num-pcs", type=int, default=get(cfg, "ancestry", "num_pcs"), help="Number of PCs")
+    parser.add_argument("--ld-window", type=int, default=get(cfg, "ancestry", "ld_window"), help="LD window size")
+    parser.add_argument("--ld-step", type=int, default=get(cfg, "ancestry", "ld_step"), help="LD step size")
+    parser.add_argument("--ld-r2", type=float, default=get(cfg, "ancestry", "ld_r2"), help="LD r2 threshold")
+    parser.add_argument("--threads", type=int, default=get(cfg, "defaults", "threads"), help="Threads")
+    parser.add_argument("--memory", type=int, default=get(cfg, "defaults", "memory"), help="Memory (MB)")
     args = parser.parse_args()
 
+    # Reload config if custom path provided
+    if args.config:
+        cfg = load_config(args.config)
+
     ancestry_pipeline(
+        cfg=cfg,
         merged_prefix=args.merged_prefix,
         cohort=args.cohort,
         maf=args.maf,
         king_cutoff=args.king_cutoff,
         num_pcs=args.num_pcs,
+        ld_window=args.ld_window,
+        ld_step=args.ld_step,
+        ld_r2=args.ld_r2,
         threads=args.threads,
         memory=args.memory,
     )

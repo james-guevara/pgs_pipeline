@@ -3,6 +3,8 @@ import subprocess
 from pathlib import Path
 import argparse
 
+from config import load_config, get
+
 
 def run(cmd):
     """Run and print shell commands."""
@@ -11,15 +13,20 @@ def run(cmd):
 
 
 def main():
+    cfg = load_config()
+
     parser = argparse.ArgumentParser(description="Run PLINK2 polygenic score calculations for multiple traits.")
+    parser.add_argument("--config", type=Path, help="Path to config.toml")
     parser.add_argument("--pfile-prefix", type=Path, required=True,
                         help="Prefix for the merged PLINK2 fileset (e.g., 05_summary/cohort).")
-    parser.add_argument("--score-list", type=Path, default=Path("sbayesrc_sumstats_filepaths.txt"),
+    parser.add_argument("--score-list", type=Path, default=Path(get(cfg, "paths", "score_list")),
                         help="Two-column file: <trait_name> <score_file_path>.")
-    parser.add_argument("--out-dir", type=Path, default=Path("scores"),
+    parser.add_argument("--out-dir", type=Path, default=Path(get(cfg, "directories", "scores")),
                         help="Output directory for .sscore files.")
-    parser.add_argument("--threads", type=int, default=32, help="Number of threads for PLINK2.")
-    parser.add_argument("--memory", type=int, default=16000, help="Memory (MB) for PLINK2.")
+    parser.add_argument("--threads", type=int, default=get(cfg, "defaults", "threads"),
+                        help="Number of threads for PLINK2.")
+    parser.add_argument("--memory", type=int, default=get(cfg, "defaults", "memory"),
+                        help="Memory (MB) for PLINK2.")
     args = parser.parse_args()
 
     pfile_prefix = args.pfile_prefix

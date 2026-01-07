@@ -2,6 +2,8 @@ import subprocess
 from pathlib import Path
 import argparse
 
+from config import load_config, get
+
 
 def run(cmd):
     """Run and print shell commands."""
@@ -10,14 +12,17 @@ def run(cmd):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run summary-level QC pipeline (Step 05).")
-    parser.add_argument("--cohort", default="cohort", help="Cohort name (used for output prefix; default: 'cohort')")
-    parser.add_argument("--threads", type=int, default=8)
-    parser.add_argument("--memory", type=int, default=16000)
-    parser.add_argument("--input-dir", type=Path, default=Path("04_missingness"),
-                        help="Directory containing per-chromosome filtered files (default: 04_missingness)")
-    parser.add_argument("--out-dir", type=Path, default=Path("05_summary"),
-                        help="Output directory (default: 05_summary)")
+    cfg = load_config()
+
+    parser = argparse.ArgumentParser(description="Run summary-level QC pipeline.")
+    parser.add_argument("--config", type=Path, help="Path to config.toml")
+    parser.add_argument("--cohort", default="cohort", help="Cohort name (used for output prefix)")
+    parser.add_argument("--threads", type=int, default=get(cfg, "defaults", "threads"))
+    parser.add_argument("--memory", type=int, default=get(cfg, "defaults", "memory"))
+    parser.add_argument("--input-dir", type=Path, default=Path(get(cfg, "directories", "missingness")),
+                        help="Directory containing per-chromosome filtered files")
+    parser.add_argument("--out-dir", type=Path, default=Path(get(cfg, "directories", "summary")),
+                        help="Output directory")
     args = parser.parse_args()
 
     cohort = args.cohort
@@ -28,26 +33,7 @@ def main():
 
     out_dir.mkdir(exist_ok=True)
 
-    # Step 1: Per-chromosome MAF filter
-    print("Applying per-chromosome MAF filter...")
-    for chr_num in range(1, 23):
-        in_prefix = in_dir / f"chr{chr_num}"
-        out_prefix = out_dir / f"chr{chr_num}"
-        if (in_prefix.with_suffix(".pgen")).exists():
-            print(f"  [Chr{chr_num}] Filtering...")
-            run([
-                "plink2",
-                "--pfile", str(in_prefix),
-                "--maf", "0.01",
-                "--make-pgen",
-                "--out", str(out_prefix),
-                "--threads", str(threads),
-                "--memory", str(memory)
-            ])
-        else:
-            print(f"⚠️  Skipping chr{chr_num}: no file found.")
-
-    # Step 2: Build merge list
+    # Build merge list from input directory (MAF already filtered in step 01)
     merge_list = out_dir / "merge_list.txt"
     merge_list.write_text("")
     print("Building merge list...")
@@ -55,7 +41,7 @@ def main():
     missing_chr = []
     with merge_list.open("a") as f:
         for chr_num in range(1, 23):
-            prefix = out_dir / f"chr{chr_num}"
+            prefix = in_dir / f"chr{chr_num}"
             if (prefix.with_suffix(".pgen")).exists():
                 f.write(str(prefix) + "\n")
             else:
@@ -64,7 +50,7 @@ def main():
     if missing_chr:
         print(f"⚠️  Warning: missing chromosomes — {' '.join(map(str, missing_chr))}")
 
-    # Step 3: Merge for summary QC
+    # Merge for summary QC
     print("Merging filtered data for final QC...")
     run([
         "plink2",
@@ -77,7 +63,7 @@ def main():
         "--memory", str(memory)
     ])
 
-    # Step 4: Quick summary counts
+    # Quick summary counts
     smiss = out_dir / f"{cohort}.smiss"
     vmiss = out_dir / f"{cohort}.vmiss"
     summary_counts = out_dir / "summary_counts.txt"
@@ -93,9 +79,9 @@ def main():
         f.write(f"Samples\t{nsamp}\n")
         f.write(f"Variants\t{nvar}\n")
 
-    # Step 5: Clean up
+    # Clean up
     merge_list.unlink(missing_ok=True)
-    print(f"✅ Summary and per-chromosome filtered data written to {out_dir}/")
+    print(f"✅ Summary QC complete. Results in {out_dir}/")
 
 
 if __name__ == "__main__":

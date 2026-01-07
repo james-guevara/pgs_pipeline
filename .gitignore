@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+
+# Local config (use config.toml.example as template)
+config.toml
+
+# Data directories
+sbayesrc/
+sumstats/
+scores/
+*_filter/
+*_annotate/
+*_maf/
+*_missingness/
+*_summary/
+*_pca/
+*_prune/
+*_relatedness/
+*.pgen
+*.psam
+*.pvar
+*.bed
+*.bim
+*.fam
+logs/
