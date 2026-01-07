@@ -348,6 +348,12 @@ def wrangle_source(source: dict, dry_run: bool = False) -> bool:
         parser = PARSERS[fmt]
         cojo_df = parser(raw_path, source)
 
+        # Uppercase alleles (GCTB requires uppercase)
+        cojo_df = cojo_df.with_columns(
+            pl.col("A1").str.to_uppercase(),
+            pl.col("A2").str.to_uppercase(),
+        )
+
         # Filter out rows with missing values
         cojo_df = cojo_df.drop_nulls()
 
