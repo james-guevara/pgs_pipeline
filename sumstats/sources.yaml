@@ -1,0 +1,584 @@
+# PGS Sumstats Sources
+#
+# Each entry documents where sumstats came from, how to download, and how to convert to COJO format.
+# COJO format columns: SNP, A1, A2, freq, b, se, p, N
+#
+# source_type values:
+#   - gwas_catalog: GWAS Catalog harmonized format (FTP downloadable)
+#   - pgc: Psychiatric Genomics Consortium (often requires manual download)
+#   - opengwas: OpenGWAS/IEU (API or direct URL)
+#   - direct: Direct from study authors/supplementary
+
+sources:
+
+  # ============================================================================
+  # PSYCHIATRIC TRAITS
+  # ============================================================================
+
+  - id: adhd_2022
+    phenotype: ADHD
+    publication: "Demontis et al. 2022"
+    doi: "10.1038/s41588-022-01285-8"
+    year: 2022
+    ancestry: EUR
+    n_samples: 225534
+    source_type: pgc
+    download:
+      method: manual
+      url: "https://figshare.com/articles/dataset/adhd2022/22564390"
+      notes: "PGC figshare - AWS WAF bot protection, must download via browser"
+    raw_file: "ADHD2022_iPSYCH_deCODE_PGC.meta.gz"
+    format: daner
+    column_mapping:
+      snp: SNP
+      a1: A1
+      a2: A2
+      freq: FRQ_U_186843  # frequency in controls
+      beta: OR
+      se: SE
+      p: P
+      n: null
+    beta_is_or: true
+    output_file: "adhd_2022.ma"
+    sbayesrc_status: done
+
+  - id: asd_2019
+    phenotype: ASD
+    publication: "Grove et al. 2019"
+    doi: "10.1038/s41588-019-0344-8"
+    year: 2019
+    ancestry: EUR
+    n_samples: 42980  # effective N
+    source_type: pgc
+    download:
+      method: manual
+      url: "https://pgc.unc.edu/for-researchers/download-results/"
+      notes: "iPSYCH-PGC ASD. We use loSSC version (excludes SSC samples for target cohort)"
+    raw_file: "daner_PGCiPSYCH_loSSC_cleaned"
+    format: daner
+    column_mapping:
+      snp: SNP
+      a1: A1
+      a2: A2
+      freq: FRQ_U_26284  # frequency in controls
+      beta: OR
+      se: SE
+      p: P
+      n: Neff
+    beta_is_or: true
+    n_override: 19514  # fixed effective N
+    output_file: "asd_2019.ma"
+    sbayesrc_status: done
+
+  - id: asd_ipsych_dbs
+    phenotype: ASD (iPSYCH-DBS)
+    publication: "iPSYCH-DBS ASD phase 3"
+    doi: null
+    year: 2024
+    ancestry: EUR
+    n_samples: 46350  # 18381 cases + 27969 controls
+    source_type: pgc
+    download:
+      method: email
+      url: null
+      notes: "Received via email - iPSYCH-DBS Autism PGC1 European phase 3"
+    raw_file: "daner_iPSYCH-DBS_Aut_PGC1_Eur_ph3.gz"
+    format: daner
+    column_mapping:
+      snp: SNP
+      a1: A1
+      a2: A2
+      freq: FRQ_U_27969  # frequency in controls
+      beta: OR
+      se: SE
+      p: P
+      n: Neff
+    beta_is_or: true
+    output_file: "asd_ipsych_dbs.ma"
+    sbayesrc_status: done
+
+  - id: scz_2022
+    phenotype: Schizophrenia
+    publication: "Trubetskoy et al. 2022"
+    doi: "10.1038/s41586-022-04434-5"
+    year: 2022
+    ancestry: EUR
+    n_samples: 130644
+    source_type: pgc
+    download:
+      method: manual
+      url: "https://pgc.unc.edu/for-researchers/download-results/"
+      notes: "PGC3 SCZ wave3 European autosome"
+    raw_file: "PGC3_SCZ_wave3.european.autosome.public.v3.vcf.tsv.gz"
+    format: pgc_vcf
+    column_mapping:
+      snp: ID
+      a1: A1
+      a2: A2
+      freq: FCON  # frequency in controls
+      beta: BETA  # already log(OR)
+      se: SE
+      p: PVAL
+      n: NEFF
+    beta_is_or: false
+    n_override: 58749  # fixed effective N used
+    output_file: "scz_2022.ma"
+    sbayesrc_status: done
+
+  - id: bip_2024
+    phenotype: Bipolar Disorder
+    publication: "Mullins et al. 2024"
+    doi: "10.1038/s41586-024-08468-9"
+    year: 2024
+    ancestry: EUR
+    n_samples: 840309
+    source_type: pgc
+    download:
+      method: manual
+      url: "https://figshare.com/articles/dataset/bip2024/27216117"
+      notes: "PGC figshare - AWS WAF bot protection, must download via browser"
+    raw_file: "bip2024_eur_no23andMe.gz"
+    format: daner
+    column_mapping:
+      snp: SNP
+      a1: A1
+      a2: A2
+      freq: HRC_FRQ_A1
+      beta: OR
+      se: SE
+      p: P
+      n: Neff_half  # multiply by 2 in parser
+    beta_is_or: true
+    output_file: "bip_2024.ma"
+    sbayesrc_status: done
+
+  - id: mdd_2025
+    phenotype: MDD
+    publication: "Levey et al. 2025"
+    doi: "10.1016/j.cell.2024.12.002"
+    year: 2025
+    ancestry: EUR
+    n_samples: 1706613
+    source_type: pgc
+    download:
+      method: manual
+      url: "https://figshare.com/articles/dataset/mdd2025/27061255"
+      notes: "PGC figshare - AWS WAF bot protection, must download via browser"
+    raw_file: "pgc-mdd2025_no23andMe_eur_v3-49-24-11.tsv.gz"
+    format: pgc_vcf
+    column_mapping:
+      snp: ID
+      a1: EA
+      a2: NEA
+      freq: FCAS  # case frequency, or use FCON for control
+      beta: BETA
+      se: SE
+      p: PVAL
+      n: NEFF
+    beta_is_or: false
+    output_file: "mdd_2025.ma"
+    sbayesrc_status: done
+
+  # ============================================================================
+  # COGNITIVE / EDUCATIONAL
+  # ============================================================================
+
+  - id: edu_2022
+    phenotype: Educational Attainment
+    publication: "Okbay et al. 2022"
+    doi: "10.1038/s41588-022-01016-z"
+    year: 2022
+    ancestry: EUR
+    n_samples: 765283
+    source_type: direct
+    download:
+      method: wget
+      url: "https://filedn.eu/lCyoUMpONNB7afAi4dJTUyX/data/genomics/GWAS/EA4/EA4_additive_excl_23andMe.txt.gz"
+      notes: "Mirror with HRC-imputed data, more SNPs than Dropbox version"
+      command: "wget -O EA4_additive_excl_23andMe.txt.gz 'https://filedn.eu/lCyoUMpONNB7afAi4dJTUyX/data/genomics/GWAS/EA4/EA4_additive_excl_23andMe.txt.gz'"
+    raw_file: "EA4_additive_excl_23andMe.txt.gz"
+    format: standard
+    column_mapping:
+      snp: rsID
+      a1: Effect_allele
+      a2: Other_allele
+      freq: EAF_HRC
+      beta: Beta
+      se: SE
+      p: P
+      n: null
+    beta_is_or: false
+    output_file: "edu_2022.ma"
+    sbayesrc_status: done
+
+  - id: iq_2018
+    phenotype: Intelligence
+    publication: "Savage et al. 2018"
+    doi: "10.1038/s41588-018-0152-6"
+    year: 2018
+    ancestry: EUR
+    n_samples: 225955
+    source_type: direct
+    download:
+      method: wget
+      url: "https://vu.data.surf.nl/index.php/s/9tgwxmO5yosQkmb/download"
+      notes: "CTG/CNCR via SURF - downloads as zip, extract SavageJansen_2018_intelligence_metaanalysis.txt"
+      command: "wget -O Savage_2018.zip 'https://vu.data.surf.nl/index.php/s/9tgwxmO5yosQkmb/download' && unzip -j Savage_2018.zip 'Savage_2018/SavageJansen_2018_intelligence_metaanalysis.txt' && rm Savage_2018.zip"
+    raw_file: "SavageJansen_2018_intelligence_metaanalysis.txt"
+    format: standard
+    column_mapping:
+      snp: SNP
+      a1: A1
+      a2: A2
+      freq: EAF_HRC
+      beta: stdBeta
+      se: SE
+      p: P
+      n: N_analyzed
+    beta_is_or: false
+    output_file: "iq_2018.ma"
+    sbayesrc_status: done
+
+  # ============================================================================
+  # ANTHROPOMETRIC
+  # ============================================================================
+
+  - id: height_2022
+    phenotype: Height
+    publication: "Yengo et al. 2022"
+    doi: "10.1038/s41586-022-05275-y"
+    year: 2022
+    ancestry: EUR
+    n_samples: 537968
+    source_type: direct
+    download:
+      method: wget
+      url: "https://giant-consortium.web.broadinstitute.org/images/f/f7/GIANT_HEIGHT_YENGO_2022_GWAS_SUMMARY_STATS_EUR.gz"
+      command: "wget -O GIANT_HEIGHT_YENGO_2022_GWAS_SUMMARY_STATS_EUR.gz 'https://giant-consortium.web.broadinstitute.org/images/f/f7/GIANT_HEIGHT_YENGO_2022_GWAS_SUMMARY_STATS_EUR.gz'"
+    raw_file: "GIANT_HEIGHT_YENGO_2022_GWAS_SUMMARY_STATS_EUR.gz"
+    format: standard
+    column_mapping:
+      snp: RSID
+      a1: EFFECT_ALLELE
+      a2: OTHER_ALLELE
+      freq: EFFECT_ALLELE_FREQ
+      beta: BETA
+      se: SE
+      p: P
+      n: N
+    beta_is_or: false
+    output_file: "height_2022.ma"
+    sbayesrc_status: done
+
+  - id: bmi_2018
+    phenotype: BMI
+    publication: "Yengo et al. 2018"
+    doi: "10.1093/hmg/ddy271"
+    year: 2018
+    ancestry: EUR
+    n_samples: 456426
+    source_type: direct
+    download:
+      method: wget
+      url: "https://giant-consortium.web.broadinstitute.org/images/c/c8/Meta-analysis_Locke_et_al%2BUKBiobank_2018_UPDATED.txt.gz"
+      command: "wget -O Meta-analysis_Locke_et_al+UKBiobank_2018_UPDATED.txt.gz 'https://giant-consortium.web.broadinstitute.org/images/c/c8/Meta-analysis_Locke_et_al%2BUKBiobank_2018_UPDATED.txt.gz'"
+      notes: "GIANT+UKB meta-analysis (updated/corrected version)"
+    raw_file: "Meta-analysis_Locke_et_al+UKBiobank_2018_UPDATED.txt.gz"
+    format: standard
+    column_mapping:
+      snp: SNP
+      a1: Tested_Allele
+      a2: Other_Allele
+      freq: Freq_Tested_Allele_in_HRS
+      beta: BETA
+      se: SE
+      p: P
+      n: N
+    beta_is_or: false
+    output_file: "bmi_2018.ma"
+    sbayesrc_status: done
+
+  # ============================================================================
+  # EXPOSURE TRAITS
+  # ============================================================================
+
+  - id: afb_2018
+    phenotype: Age at First Birth
+    publication: "UKB GWAS"
+    doi: null
+    year: 2018
+    ancestry: EUR
+    n_samples: 170498
+    source_type: opengwas
+    download:
+      method: manual  # OpenGWAS now requires auth, no direct wget
+      url: "https://opengwas.io/datasets/ukb-b-12405"
+      notes: "Click 'VCF Files' on web page (20/day limit), or use ieugwaspy with JWT token"
+    raw_file: "ukb-b-12405.vcf.gz"
+    format: opengwas_vcf
+    column_mapping:
+      snp: ID
+      a1: ALT
+      a2: REF
+      freq: AF  # from INFO field
+      beta: ES  # from FORMAT field
+      se: SE
+      p: LP  # -log10(p), needs conversion
+      n: null
+    beta_is_or: false
+    p_is_log: true  # p = 10^(-LP)
+    output_file: "afb_2018.ma"
+    sbayesrc_status: done
+    notes: "Downloaded via OpenGWAS API - curl POST to https://api.opengwas.io/api/gwasinfo/files/trial"
+
+  # ============================================================================
+  # OTHER PSYCHIATRIC
+  # ============================================================================
+
+  - id: ptsd_2024
+    phenotype: PTSD
+    publication: "Nievergelt et al. 2024"
+    doi: "10.1038/s41588-024-01707-9"
+    year: 2024
+    ancestry: EUR
+    n_samples: 1190728
+    source_type: pgc
+    download:
+      method: manual
+      url: "https://figshare.com/articles/dataset/ptsd2024/26349322"
+      notes: "PGC figshare - AWS WAF bot protection, must download via browser"
+    raw_file: "eur_ptsdcasecontrol_pcs_v4_aug3_2021.vcf.gz"
+    format: pgc_vcf
+    column_mapping:
+      snp: ID
+      a1: A1
+      a2: A2
+      freq: FREQ
+      beta: BETA
+      se: SE
+      p: P
+      n: NEFF
+    beta_is_or: false
+    output_file: "ptsd_2024.ma"
+    sbayesrc_status: done
+
+  # ============================================================================
+  # PENDING - NOT YET PROCESSED
+  # ============================================================================
+
+  - id: smoking_2022
+    phenotype: Smoking Initiation
+    publication: "Saunders et al. 2022 (GSCAN)"
+    doi: "10.1038/s41586-022-05761-3"
+    year: 2022
+    ancestry: EUR
+    n_samples: 805431
+    source_type: direct
+    download:
+      method: manual
+      url: "https://conservancy.umn.edu/items/91f6a003-6af2-4809-9785-53dc579dc788"
+      notes: "GSCAN consortium - EUR_stratified.zip, requires login"
+    raw_file: "GSCAN_SmkInit_2022_GWAS_SUMMARY_STATS_EUR.txt.gz"
+    format: standard
+    column_mapping:
+      snp: RSID
+      a1: EFFECT_ALLELE
+      a2: OTHER_ALLELE
+      freq: AF_1000G
+      beta: BETA
+      se: SE
+      p: P
+      n: N
+    beta_is_or: false
+    output_file: "smoking_2022.ma"
+    sbayesrc_status: done
+
+  - id: drinks_2022
+    phenotype: Drinks per Week
+    publication: "Saunders et al. 2022 (GSCAN)"
+    doi: "10.1038/s41586-022-05761-3"
+    year: 2022
+    ancestry: EUR
+    n_samples: 666978
+    source_type: direct
+    download:
+      method: manual
+      url: "https://conservancy.umn.edu/items/91f6a003-6af2-4809-9785-53dc579dc788"
+      notes: "GSCAN consortium - EUR_stratified.zip, requires login"
+    raw_file: "GSCAN_DrnkWk_2022_GWAS_SUMMARY_STATS_EUR.txt.gz"
+    format: standard
+    column_mapping:
+      snp: RSID
+      a1: EFFECT_ALLELE
+      a2: OTHER_ALLELE
+      freq: AF_1000G
+      beta: BETA
+      se: SE
+      p: P
+      n: N
+    beta_is_or: false
+    output_file: "drinks_2022.ma"
+    sbayesrc_status: done
+
+  - id: cigperday_2022
+    phenotype: Cigarettes per Day
+    publication: "Saunders et al. 2022 (GSCAN)"
+    doi: "10.1038/s41586-022-05761-3"
+    year: 2022
+    ancestry: EUR
+    n_samples: 245443
+    source_type: direct
+    download:
+      method: manual
+      url: "https://conservancy.umn.edu/items/91f6a003-6af2-4809-9785-53dc579dc788"
+      notes: "GSCAN consortium - EUR_stratified.zip, requires login"
+    raw_file: "GSCAN_CigDay_2022_GWAS_SUMMARY_STATS_EUR.txt.gz"
+    format: standard
+    column_mapping:
+      snp: RSID
+      a1: EFFECT_ALLELE
+      a2: OTHER_ALLELE
+      freq: AF_1000G
+      beta: BETA
+      se: SE
+      p: P
+      n: N
+    beta_is_or: false
+    output_file: "cigperday_2022.ma"
+    sbayesrc_status: done
+
+  - id: agesmk_2022
+    phenotype: Age of Smoking Initiation
+    publication: "Saunders et al. 2022 (GSCAN)"
+    doi: "10.1038/s41586-022-05761-3"
+    year: 2022
+    ancestry: EUR
+    n_samples: 261540
+    source_type: direct
+    download:
+      method: manual
+      url: "https://conservancy.umn.edu/items/91f6a003-6af2-4809-9785-53dc579dc788"
+      notes: "GSCAN consortium - EUR_stratified.zip, requires login"
+    raw_file: "GSCAN_AgeSmk_2022_GWAS_SUMMARY_STATS_EUR.txt.gz"
+    format: standard
+    column_mapping:
+      snp: RSID
+      a1: EFFECT_ALLELE
+      a2: OTHER_ALLELE
+      freq: AF_1000G
+      beta: BETA
+      se: SE
+      p: P
+      n: N
+    beta_is_or: false
+    output_file: "agesmk_2022.ma"
+    sbayesrc_status: done
+
+  - id: smkces_2022
+    phenotype: Smoking Cessation
+    publication: "Saunders et al. 2022 (GSCAN)"
+    doi: "10.1038/s41586-022-05761-3"
+    year: 2022
+    ancestry: EUR
+    n_samples: 386624
+    source_type: direct
+    download:
+      method: manual
+      url: "https://conservancy.umn.edu/items/91f6a003-6af2-4809-9785-53dc579dc788"
+      notes: "GSCAN consortium - EUR_stratified.zip, requires login"
+    raw_file: "GSCAN_SmkCes_2022_GWAS_SUMMARY_STATS_EUR.txt.gz"
+    format: standard
+    column_mapping:
+      snp: RSID
+      a1: EFFECT_ALLELE
+      a2: OTHER_ALLELE
+      freq: AF_1000G
+      beta: BETA
+      se: SE
+      p: P
+      n: N
+    beta_is_or: false
+    output_file: "smkces_2022.ma"
+    sbayesrc_status: done
+
+  - id: haircolor_darkbrown_2025
+    phenotype: Hair Color (Dark Brown)
+    publication: "Pan-UKB 2025"
+    doi: "10.1101/2024.03.13.24303864"
+    year: 2025
+    ancestry: EUR
+    n_samples: 419469
+    source_type: gwas_catalog
+    download:
+      method: ftp
+      url: "ftp://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/GCST90691001-GCST90692000/GCST90691600/harmonised/"
+      notes: "GWAS Catalog harmonised format - UKB field 1747 Dark brown"
+    raw_file: "GCST90691600.h.tsv.gz"
+    format: standard
+    column_mapping:
+      snp: rsid
+      a1: effect_allele
+      a2: other_allele
+      freq: effect_allele_frequency
+      beta: beta
+      se: standard_error
+      p: p_value
+      n: null
+    beta_is_or: false
+    output_file: "haircolor_darkbrown_2025.ma"
+    sbayesrc_status: done
+
+  - id: haircolor_black_2025
+    phenotype: Hair Color (Black)
+    publication: "Pan-UKB 2025"
+    doi: "10.1101/2024.03.13.24303864"
+    year: 2025
+    ancestry: EUR
+    n_samples: 419469
+    source_type: gwas_catalog
+    download:
+      method: ftp
+      url: "ftp://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/GCST90691001-GCST90692000/GCST90691601/harmonised/"
+      notes: "GWAS Catalog harmonised format - UKB field 1747 Black"
+    raw_file: "GCST90691601.h.tsv.gz"
+    format: standard
+    column_mapping:
+      snp: rsid
+      a1: effect_allele
+      a2: other_allele
+      freq: effect_allele_frequency
+      beta: beta
+      se: standard_error
+      p: p_value
+      n: null
+    beta_is_or: false
+    output_file: "haircolor_black_2025.ma"
+    sbayesrc_status: done
+
+  - id: pm25_2018
+    phenotype: PM2.5 Air Pollution
+    publication: "UKB GWAS"
+    year: 2018
+    ancestry: EUR
+    n_samples: 423796
+    source_type: opengwas
+    download:
+      method: manual  # OpenGWAS now requires auth
+      url: "https://opengwas.io/datasets/ukb-b-10817"
+      notes: "Click 'VCF Files' on web page (20/day limit), or use ieugwaspy with JWT token"
+    raw_file: "ukb-b-10817.vcf.gz"
+    format: opengwas_vcf
+    column_mapping:
+      snp: ID
+      a1: ALT
+      a2: REF
+      freq: AF
+      beta: ES
+      se: SE
+      p: LP
+      n: null
+    beta_is_or: false
+    p_is_log: true
+    output_file: "pm25_2018.ma"
+    sbayesrc_status: done
+    notes: "Downloaded via OpenGWAS API - curl POST to https://api.opengwas.io/api/gwasinfo/files/trial"

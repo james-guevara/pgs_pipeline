@@ -1,0 +1,6 @@
+# Raw sumstats (large files, download separately)
+raw/
+
+# Keep cojo output tracked (smaller, results of wrangling)
+# Uncomment below to also ignore cojo files:
+# cojo/

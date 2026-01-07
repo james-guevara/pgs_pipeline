@@ -6,9 +6,15 @@ __pycache__/
 config.toml
 
 # Data directories
-sbayesrc/
-sumstats/
 scores/
+
+# sumstats - track scripts, ignore data
+sumstats/raw/
+sumstats/cojo/
+
+# sbayesrc - track scripts, ignore data
+sbayesrc/logs/
+sbayesrc/*.ma
 *_filter/
 *_annotate/
 *_maf/
