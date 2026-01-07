@@ -1,0 +1,45 @@
+# PGS Pipeline Configuration
+# Copy this file to config.toml and modify as needed.
+# All values shown are defaults - only override what you need.
+
+[paths]
+rsid_maps = "rsid_maps"                           # Directory with chr*.map files for rsID annotation
+score_list = "sbayesrc_sumstats_filepaths.txt"    # File listing score weight files for step 04
+
+[directories]
+# Step 01 outputs
+filter = "01_filter"
+annotate = "02_annotate"
+maf = "03_maf"
+
+# Step 02-03 outputs
+missingness = "04_missingness"
+summary = "05_summary"
+
+# Step 04 output
+scores = "scores"
+
+# Step 05 ancestry outputs
+ancestry_maf = "06_maf"
+ancestry_prune = "07_prune"
+ancestry_relatedness = "08_relatedness"
+ancestry_pca = "09_pca"
+
+[defaults]
+threads = 16
+memory = 16000    # MB
+
+[filters]
+maf = 0.01              # Minor allele frequency threshold
+geno = 0.05             # Genotype missingness threshold (step 01)
+mac = 10                # Minor allele count threshold
+sample_miss = 0.05      # Sample missingness threshold (step 02)
+variant_miss = 0.05     # Variant missingness threshold (step 02)
+
+[ancestry]
+maf = 0.05              # Stricter MAF for ancestry analysis
+king_cutoff = 0.0884    # KING relatedness cutoff (~2nd degree)
+num_pcs = 10            # Number of principal components
+ld_window = 200         # LD pruning window size (kb)
+ld_step = 50            # LD pruning step size
+ld_r2 = 0.1             # LD pruning r2 threshold
