@@ -78,20 +78,28 @@ echo "[$(date)] Step 1: Imputing summary statistics..."
 
 if [[ -f "${TIDY_DIR}/${NAME}.imputed.ma" ]]; then
     echo "[$(date)] Using existing imputed file"
+    GWAS_FOR_SBAYESRC="${TIDY_DIR}/${NAME}.imputed.ma"
 else
+    IMPUTE_LOG="${TIDY_DIR}/${NAME}.impute.log"
     singularity exec --bind /expanse/projects/sebat1 "$SIF" \
         gctb --ldm-eigen "$LDM" \
              --gwas-summary "${INPUT_DIR}/${GWAS}" \
              --impute-summary \
-             --out "${TIDY_DIR}/${NAME}"
+             --out "${TIDY_DIR}/${NAME}" 2>&1 | tee "$IMPUTE_LOG"
 
-    if [[ ! -f "${TIDY_DIR}/${NAME}.imputed.ma" ]]; then
+    # Check if imputation created output, or if no imputation was needed
+    if [[ -f "${TIDY_DIR}/${NAME}.imputed.ma" ]]; then
+        GWAS_FOR_SBAYESRC="${TIDY_DIR}/${NAME}.imputed.ma"
+    elif grep -q "No SNP needs to be imputed" "$IMPUTE_LOG"; then
+        echo "[$(date)] No imputation needed - using original file"
+        GWAS_FOR_SBAYESRC="${INPUT_DIR}/${GWAS}"
+    else
         echo "[$(date)] ERROR: Imputation failed"
         exit 1
     fi
 fi
 
-echo "[$(date)] Step 1 complete: $(wc -l < "${TIDY_DIR}/${NAME}.imputed.ma") SNPs"
+echo "[$(date)] Step 1 complete: $(wc -l < "$GWAS_FOR_SBAYESRC") SNPs"
 
 #-------------------------------------------------------------------------------
 # STEP 2: SBayesRC
@@ -101,7 +109,7 @@ echo "[$(date)] Step 2: Running SBayesRC..."
 
 singularity exec --bind /expanse/projects/sebat1 "$SIF" \
     gctb --ldm-eigen "$LDM" \
-         --gwas-summary "${TIDY_DIR}/${NAME}.imputed.ma" \
+         --gwas-summary "$GWAS_FOR_SBAYESRC" \
          --sbayes RC \
          --annot "$ANNOT" \
          --out "${WEIGHTS_DIR}/${NAME}" \
