@@ -22,8 +22,19 @@ def load_sscore(filepath: Path, trait_name: str | None = None) -> pl.DataFrame:
     return df
 
 
-def combine_scores(score_dir: Path, output: Path | None = None) -> pl.DataFrame:
-    """Combine all .sscore files in a directory into one table."""
+def load_pca(filepath: Path, num_pcs: int = 10) -> pl.DataFrame:
+    """Load a PCA .sscore file and extract IID + PCs."""
+    df = pl.read_csv(filepath, separator="\t")
+
+    # Select IID and PC columns
+    pc_cols = [pl.col(f"PC{i}_AVG").alias(f"PC{i}") for i in range(1, num_pcs + 1)]
+    df = df.select([pl.col("#IID").alias("IID")] + pc_cols)
+
+    return df
+
+
+def combine_scores(score_dir: Path, pca_file: Path | None = None, output: Path | None = None) -> pl.DataFrame:
+    """Combine all .sscore files in a directory into one table, optionally with PCs."""
     score_files = sorted(score_dir.glob("*.sscore"))
 
     if not score_files:
@@ -41,6 +52,12 @@ def combine_scores(score_dir: Path, output: Path | None = None) -> pl.DataFrame:
     for df in dfs[1:]:
         combined = combined.join(df, on="IID", how="full", coalesce=True)
 
+    # Optionally add PCs
+    if pca_file:
+        print(f"Adding PCs from: {pca_file.name}")
+        pca = load_pca(pca_file)
+        combined = combined.join(pca, on="IID", how="full", coalesce=True)
+
     print(f"\nCombined: {combined.shape[0]} samples × {combined.shape[1]} columns")
 
     if output:
@@ -57,10 +74,11 @@ def main():
     parser = argparse.ArgumentParser(description="Combine PLINK2 .sscore files into one table")
     parser.add_argument("score_dir", type=Path, help="Directory containing .sscore files")
     parser.add_argument("-o", "--output", type=Path, help="Output file (.tsv or .parquet)")
+    parser.add_argument("--pca", type=Path, help="PCA .sscore file to include PC1-PC10")
     parser.add_argument("--stats", action="store_true", help="Print summary statistics")
     args = parser.parse_args()
 
-    combined = combine_scores(args.score_dir, args.output)
+    combined = combine_scores(args.score_dir, pca_file=args.pca, output=args.output)
 
     if args.stats:
         print("\n=== Summary Statistics ===")
