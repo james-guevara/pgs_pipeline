@@ -582,3 +582,30 @@ sources:
     output_file: "pm25_2018.ma"
     sbayesrc_status: done
     notes: "Downloaded via OpenGWAS API - curl POST to https://api.opengwas.io/api/gwasinfo/files/trial"
+
+  - id: no2_2018
+    phenotype: NO2 Air Pollution
+    publication: "UKB GWAS"
+    year: 2018
+    ancestry: EUR
+    n_samples: 423796
+    source_type: opengwas
+    download:
+      method: manual  # OpenGWAS now requires auth
+      url: "https://opengwas.io/datasets/ukb-b-5620"
+      notes: "Click 'VCF Files' on web page (20/day limit), or use ieugwaspy with JWT token"
+    raw_file: "ukb-b-5620.vcf.gz"
+    format: opengwas_vcf
+    column_mapping:
+      snp: ID
+      a1: ALT
+      a2: REF
+      freq: AF
+      beta: ES
+      se: SE
+      p: LP
+      n: null
+    beta_is_or: false
+    p_is_log: true
+    output_file: "no2_2018.ma"
+    sbayesrc_status: pending
