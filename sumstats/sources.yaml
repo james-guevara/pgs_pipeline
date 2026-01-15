@@ -8,6 +8,16 @@
 #   - pgc: Psychiatric Genomics Consortium (often requires manual download)
 #   - opengwas: OpenGWAS/IEU (API or direct URL)
 #   - direct: Direct from study authors/supplementary
+#
+# Sample size fields:
+#   - n_samples: Publication-level total N (may be multi-ancestry, all cohorts)
+#   - file_n: Sample sizes from the actual sumstats file (may differ due to ancestry subset, 23andMe exclusion, etc.)
+#       - source: where the values came from
+#           - "sumstats_header": from ## header lines (PGC VCF format)
+#           - "column_names": from column names like FRQ_A_N, FRQ_U_N (daner format)
+#           - "data_columns": from per-SNP columns like Nca, Nco (daner format)
+#           - "data_column_max": max value from N column (continuous traits)
+#       - n_case, n_control, n_effective, n_cohort, n_max: as available
 
 sources:
 
@@ -29,6 +39,11 @@ sources:
       notes: "PGC figshare - AWS WAF bot protection, must download via browser"
     raw_file: "ADHD2022_iPSYCH_deCODE_PGC.meta.gz"
     format: daner
+    # Sample sizes from column names (FRQ_A_N, FRQ_U_N)
+    file_n:
+      source: column_names
+      n_case: 38691
+      n_control: 186843
     column_mapping:
       snp: SNP
       a1: A1
@@ -76,7 +91,7 @@ sources:
     doi: null
     year: 2024
     ancestry: EUR
-    n_samples: 46350  # 18381 cases + 27969 controls
+    n_samples: 46350
     source_type: pgc
     download:
       method: email
@@ -84,6 +99,11 @@ sources:
       notes: "Received via email - iPSYCH-DBS Autism PGC1 European phase 3"
     raw_file: "daner_iPSYCH-DBS_Aut_PGC1_Eur_ph3.gz"
     format: daner
+    # Sample sizes from column names (FRQ_A_N, FRQ_U_N)
+    file_n:
+      source: column_names
+      n_case: 18381
+      n_control: 27969
     column_mapping:
       snp: SNP
       a1: A1
@@ -103,7 +123,7 @@ sources:
     doi: "10.1038/s41586-022-04434-5"
     year: 2022
     ancestry: EUR
-    n_samples: 130644
+    n_samples: 320404  # full study including deCODE
     source_type: pgc
     download:
       method: manual
@@ -111,6 +131,13 @@ sources:
       notes: "PGC3 SCZ wave3 European autosome"
     raw_file: "PGC3_SCZ_wave3.european.autosome.public.v3.vcf.tsv.gz"
     format: pgc_vcf
+    # Sample sizes from sumstats header (EUR only)
+    file_n:
+      source: sumstats_header
+      n_case: 52017
+      n_control: 75889
+      n_trio: 1369
+      n_cohort: 76
     column_mapping:
       snp: ID
       a1: A1
@@ -131,7 +158,7 @@ sources:
     doi: "10.1038/s41586-024-08468-9"
     year: 2024
     ancestry: EUR
-    n_samples: 840309
+    n_samples: 840309  # full study
     source_type: pgc
     download:
       method: manual
@@ -139,6 +166,12 @@ sources:
       notes: "PGC figshare - AWS WAF bot protection, must download via browser"
     raw_file: "bip2024_eur_no23andMe.gz"
     format: daner
+    # Sample sizes from data columns (Nca, Nco, Neff_half)
+    file_n:
+      source: data_columns
+      n_case: 58452
+      n_control: 778655
+      n_effective: 160898  # Neff_half * 2
     column_mapping:
       snp: SNP
       a1: A1
@@ -158,7 +191,7 @@ sources:
     doi: "10.1016/j.cell.2024.12.002"
     year: 2025
     ancestry: EUR
-    n_samples: 1706613
+    n_samples: 5053033  # full study: 688808 cases + 4364225 controls (multi-ancestry)
     source_type: pgc
     download:
       method: manual
@@ -166,6 +199,13 @@ sources:
       notes: "PGC figshare - AWS WAF bot protection, must download via browser"
     raw_file: "pgc-mdd2025_no23andMe_eur_v3-49-24-11.tsv.gz"
     format: pgc_vcf
+    # Sample sizes from sumstats file header (EUR-only, no 23andMe)
+    file_n:
+      source: sumstats_header
+      n_case: 412305
+      n_control: 1588397
+      n_effective: 1152656
+      n_cohort: 75
     column_mapping:
       snp: ID
       a1: EA
@@ -249,7 +289,7 @@ sources:
     doi: "10.1038/s41586-022-05275-y"
     year: 2022
     ancestry: EUR
-    n_samples: 537968
+    n_samples: 5380080  # full study (multi-ancestry)
     source_type: direct
     download:
       method: wget
@@ -257,6 +297,11 @@ sources:
       command: "wget -O GIANT_HEIGHT_YENGO_2022_GWAS_SUMMARY_STATS_EUR.gz 'https://giant-consortium.web.broadinstitute.org/images/f/f7/GIANT_HEIGHT_YENGO_2022_GWAS_SUMMARY_STATS_EUR.gz'"
     raw_file: "GIANT_HEIGHT_YENGO_2022_GWAS_SUMMARY_STATS_EUR.gz"
     format: standard
+    # Sample size from N column (varies per SNP)
+    file_n:
+      source: data_column_max
+      n_max: 1597374
+      notes: "N varies per SNP due to missingness"
     column_mapping:
       snp: RSID
       a1: EFFECT_ALLELE
@@ -276,7 +321,7 @@ sources:
     doi: "10.1093/hmg/ddy271"
     year: 2018
     ancestry: EUR
-    n_samples: 456426
+    n_samples: 681275  # full study
     source_type: direct
     download:
       method: wget
@@ -285,6 +330,11 @@ sources:
       notes: "GIANT+UKB meta-analysis (updated/corrected version)"
     raw_file: "Meta-analysis_Locke_et_al+UKBiobank_2018_UPDATED.txt.gz"
     format: standard
+    # Sample size from N column (varies per SNP)
+    file_n:
+      source: data_column_max
+      n_max: 795640
+      notes: "N varies per SNP due to missingness"
     column_mapping:
       snp: SNP
       a1: Tested_Allele
@@ -341,7 +391,7 @@ sources:
     doi: "10.1038/s41588-024-01707-9"
     year: 2024
     ancestry: EUR
-    n_samples: 1190728
+    n_samples: 1307247  # full study (multi-ancestry)
     source_type: pgc
     download:
       method: manual
@@ -349,6 +399,12 @@ sources:
       notes: "PGC figshare - AWS WAF bot protection, must download via browser"
     raw_file: "eur_ptsdcasecontrol_pcs_v4_aug3_2021.vcf.gz"
     format: pgc_vcf
+    # Sample sizes from sumstats header (EUR only)
+    file_n:
+      source: sumstats_header
+      n_case: 137136
+      n_control: 1085746
+      n_cohort: 63
     column_mapping:
       snp: ID
       a1: A1
