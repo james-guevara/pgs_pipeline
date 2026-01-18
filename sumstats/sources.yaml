@@ -18,6 +18,17 @@
 #           - "data_columns": from per-SNP columns like Nca, Nco (daner format)
 #           - "data_column_max": max value from N column (continuous traits)
 #       - n_case, n_control, n_effective, n_cohort, n_max: as available
+#
+# QC filters to apply before SBayesRC (TODO - not yet implemented in wrangle.py):
+#   1. Remove strand ambiguous SNPs (A/T and G/C allele pairs)
+#   2. INFO > 0.6 (imputation quality, when available)
+#   3. MAF > 1% (minor allele frequency)
+#   4. Neff > 50% of max Neff (SNP-specific effective N), OR
+#      >50% of cohorts contributed (from direction column, when available)
+#   5. Exclude MHC region (chr6:25-35 Mb in GRCh37)
+#
+# Reference: Cross-disorder GWAS QC (e.g., PGC cross-disorder papers)
+# Genome build: GRCh37/hg19 throughout
 
 sources:
 
