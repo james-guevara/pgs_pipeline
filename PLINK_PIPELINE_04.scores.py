@@ -18,7 +18,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run PLINK2 polygenic score calculations for multiple traits.")
     parser.add_argument("--config", type=Path, help="Path to config.toml")
     parser.add_argument("--pfile-prefix", type=Path, required=True,
-                        help="Prefix for the merged PLINK2 fileset (e.g., 05_summary/cohort).")
+                        help="Prefix for the merged PLINK2 fileset (e.g., 03_summary/cohort).")
     parser.add_argument("--score-list", type=Path, default=Path(get(cfg, "paths", "score_list")),
                         help="Two-column file: <trait_name> <score_file_path>.")
     parser.add_argument("--out-dir", type=Path, default=Path(get(cfg, "directories", "scores")),
@@ -67,7 +67,7 @@ def main():
             "--out", str(out_prefix)
         ])
 
-    print(f"\n✅ All {len(score_entries)} polygenic scores computed. Results in {out_dir}/")
+    print(f"\nAll {len(score_entries)} polygenic scores computed. Results in {out_dir}/")
 
 
 if __name__ == "__main__":

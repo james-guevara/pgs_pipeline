@@ -7,27 +7,31 @@ rsid_maps = "rsid_maps"                           # Directory with chr*.map file
 score_list = "sbayesrc_sumstats_filepaths.txt"    # File listing score weight files for step 04
 
 [directories]
-# Step 01 outputs
-filter = "01_filter"
-annotate = "02_annotate"
-maf = "03_maf"
+# Step 01 sub-step outputs
+filter = "01a_filter"
+annotate = "01b_annotate"
+maf = "01c_maf"
+merge = "01d_merge"                               # Optional: batch merge output
 
 # Step 02-03 outputs
-missingness = "04_missingness"
-summary = "05_summary"
+missingness = "02_missingness"
+summary = "03_summary"
 
 # Step 04 output
 scores = "scores"
 
-# Step 05 ancestry outputs
-ancestry_maf = "06_maf"
-ancestry_prune = "07_prune"
-ancestry_relatedness = "08_relatedness"
-ancestry_pca = "09_pca"
+# Step 05 ancestry sub-step outputs
+ancestry_maf = "05a_maf"
+ancestry_prune = "05b_prune"
+ancestry_relatedness = "05c_relatedness"
+ancestry_pca = "05d_pca"
 
 [defaults]
 threads = 16
 memory = 16000    # MB
+
+[output]
+format = "pgen"   # "pgen", "bed", or "both"
 
 [filters]
 maf = 0.01              # Minor allele frequency threshold

@@ -48,7 +48,7 @@ def main():
                 missing_chr.append(chr_num)
 
     if missing_chr:
-        print(f"⚠️  Warning: missing chromosomes — {' '.join(map(str, missing_chr))}")
+        print(f"Warning: missing chromosomes -- {' '.join(map(str, missing_chr))}")
 
     # Merge for summary QC
     print("Merging filtered data for final QC...")
@@ -80,8 +80,9 @@ def main():
         f.write(f"Variants\t{nvar}\n")
 
     # Clean up
-    merge_list.unlink(missing_ok=True)
-    print(f"✅ Summary QC complete. Results in {out_dir}/")
+    if merge_list.exists():
+        merge_list.unlink()
+    print(f"Summary QC complete. Results in {out_dir}/")
 
 
 if __name__ == "__main__":

@@ -16,9 +16,9 @@ def run(cmd):
 # Individual steps
 # -------------------------------------------------------------------------
 def maf_filter(merged, out_dir, cohort, maf, threads, memory):
-    """Apply MAF ≥ threshold filter."""
+    """Apply MAF >= threshold filter."""
     out_prefix = Path(out_dir) / cohort
-    print(f"\n[1/4] Applying MAF ≥ {maf} filter on merged dataset...")
+    print(f"\n[1/4] Applying MAF >= {maf} filter on merged dataset...")
     run([
         "plink2",
         "--pfile", str(merged),
@@ -149,7 +149,7 @@ def ancestry_pipeline(cfg, merged_prefix, cohort, maf, king_cutoff, num_pcs,
     king_prefix, keep_file = king_relatedness(pruned_prefix, rel_dir, cohort, king_cutoff, threads, memory)
     ref_prefix, proj_prefix = pca_analysis(pruned_prefix, keep_file, pca_dir, cohort, threads, memory, num_pcs)
 
-    print("\n✅ Done.")
+    print("\nDone.")
     print(f"MAF-filtered dataset:      {maf_prefix}.*")
     print(f"Pruned dataset:            {pruned_prefix}.*")
     print(f"KING results:              {king_prefix}.king(.id/.kin0)")
@@ -161,9 +161,9 @@ def ancestry_pipeline(cfg, merged_prefix, cohort, maf, king_cutoff, num_pcs,
 def main():
     cfg = load_config()
 
-    parser = argparse.ArgumentParser(description="Run ancestry pipeline (MAF → prune → KING → PCA).")
+    parser = argparse.ArgumentParser(description="Run ancestry pipeline (MAF -> prune -> KING -> PCA).")
     parser.add_argument("--config", type=Path, help="Path to config.toml")
-    parser.add_argument("--merged-prefix", required=True, help="Prefix of merged pfile (e.g., 05_summary/cohort).")
+    parser.add_argument("--merged-prefix", required=True, help="Prefix of merged pfile (e.g., 03_summary/cohort).")
     parser.add_argument("--cohort", default="cohort", help="Cohort name")
     parser.add_argument("--maf", type=float, default=get(cfg, "ancestry", "maf"), help="MAF threshold")
     parser.add_argument("--king-cutoff", type=float, default=get(cfg, "ancestry", "king_cutoff"),
