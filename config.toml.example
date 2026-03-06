@@ -4,27 +4,30 @@
 
 [paths]
 rsid_maps = "rsid_maps"                           # Directory with chr*.map files for rsID annotation
-score_list = "sbayesrc_sumstats_filepaths.txt"    # File listing score weight files for step 04
+score_list = "sbayesrc_sumstats_filepaths.txt"    # File listing score weight files for step 05
 
 [directories]
-# Step 01 sub-step outputs
+# Step 01 sub-step outputs (per-chromosome)
 filter = "01a_filter"
 annotate = "01b_annotate"
 maf = "01c_maf"
 merge = "01d_merge"                               # Optional: batch merge output
 
-# Step 02-03 outputs
-missingness = "02_missingness"
-summary = "03_summary"
+# Step 02: concat per-chr into genome-wide pfile
+concat = "02_concat"
 
-# Step 04 output
+# Steps 03-04: QC on genome-wide pfile
+missingness = "03_missingness"
+summary = "04_summary"
+
+# Step 05 output
 scores = "scores"
 
-# Step 05 ancestry sub-step outputs
-ancestry_maf = "05a_maf"
-ancestry_prune = "05b_prune"
-ancestry_relatedness = "05c_relatedness"
-ancestry_pca = "05d_pca"
+# Step 06 ancestry sub-step outputs
+ancestry_maf = "06a_maf"
+ancestry_prune = "06b_prune"
+ancestry_relatedness = "06c_relatedness"
+ancestry_pca = "06d_pca"
 
 [defaults]
 threads = 16
@@ -37,8 +40,8 @@ format = "pgen"   # "pgen", "bed", or "both"
 maf = 0.01              # Minor allele frequency threshold
 geno = 0.05             # Genotype missingness threshold (step 01)
 mac = 10                # Minor allele count threshold
-sample_miss = 0.05      # Sample missingness threshold (step 02)
-variant_miss = 0.05     # Variant missingness threshold (step 02)
+sample_miss = 0.05      # Sample missingness threshold (step 03)
+variant_miss = 0.05     # Variant missingness threshold (step 03)
 
 [ancestry]
 maf = 0.05              # Stricter MAF for ancestry analysis

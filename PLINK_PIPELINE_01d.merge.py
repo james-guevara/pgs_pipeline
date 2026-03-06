@@ -53,7 +53,7 @@ def merge_chromosome(chr_num, maf_dir, out_dir, batches, threads, memory):
                 if src.exists():
                     import shutil
                     shutil.copy2(src, dst)
-            # Convert copied bed to pgen
+            # Convert copied bed to pgen, then remove bed files
             out_prefix = str(out_path / f"chr{chr_num}")
             pgen_cmd = [
                 "plink2",
@@ -64,6 +64,10 @@ def merge_chromosome(chr_num, maf_dir, out_dir, batches, threads, memory):
                 "--memory", str(memory)
             ]
             run(pgen_cmd)
+            for ext in (".bed", ".bim", ".fam"):
+                p = Path(f"{out_prefix}{ext}")
+                if p.exists():
+                    p.unlink()
             return
         else:
             print(f"No bed files found for chr{chr_num}, skipping.")
@@ -92,7 +96,7 @@ def merge_chromosome(chr_num, maf_dir, out_dir, batches, threads, memory):
     if merge_list.exists():
         merge_list.unlink()
 
-    # Convert merged bed to pgen
+    # Convert merged bed to pgen, then remove bed files
     pgen_cmd = [
         "plink2",
         "--bfile", out_prefix,
@@ -102,6 +106,10 @@ def merge_chromosome(chr_num, maf_dir, out_dir, batches, threads, memory):
         "--memory", str(memory)
     ]
     run(pgen_cmd)
+    for ext in (".bed", ".bim", ".fam"):
+        p = Path(f"{out_prefix}{ext}")
+        if p.exists():
+            p.unlink()
 
 
 def main():
