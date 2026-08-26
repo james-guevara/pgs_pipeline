@@ -2,6 +2,12 @@
 __pycache__/
 *.pyc
 
+# Nextflow runtime state
+.nextflow/
+.nextflow.log*
+work/
+pipeline_info/
+
 # Local config (use config.toml.example as template)
 config.toml
 

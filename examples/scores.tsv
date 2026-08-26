@@ -1,0 +1,3 @@
+# trait<TAB>path_or_s3_uri_to_SBayesRC_snpRes
+height	s3://my-pgs-bucket/weights/height.snpRes
+bmi	s3://my-pgs-bucket/weights/bmi.snpRes
