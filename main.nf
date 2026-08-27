@@ -177,7 +177,7 @@ process CONCAT_CHROMOSOMES {
     script:
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
-    find . -maxdepth 1 -name 'chr*.pgen' -print | sed 's/\.pgen${'$'}//' | sort -V > merge_list.txt
+    find . -maxdepth 1 -name 'chr*.pgen' -print | sed 's/[.]pgen${'$'}//' | sort -V > merge_list.txt
     test -s merge_list.txt
     if [ "${'$'}(wc -l < merge_list.txt)" -eq 1 ]; then
       plink2 \
