@@ -34,6 +34,10 @@ def chromosomeList(value) {
     return text.split(',')*.trim().findAll { it }*.toInteger()
 }
 
+def flagEnabled(value) {
+    return value instanceof Boolean ? value : value?.toString()?.toBoolean()
+}
+
 process PREPROCESS_CHROMOSOME {
     tag "chr${chr}"
     label 'small'
@@ -312,7 +316,12 @@ process ANCESTRY {
 }
 
 workflow {
-    if (!params.vcfs || (!params.rsid_maps && !params.skip_rsid_annotation)) {
+    def skipRsid = flagEnabled(params.skip_rsid_annotation)
+    def directInputsEnabled = flagEnabled(params.direct_inputs) || flagEnabled(params.fsx_direct)
+    def ancestryEnabled = flagEnabled(params.run_ancestry)
+    def scoresEnabled = flagEnabled(params.run_scores)
+
+    if (!params.vcfs || (!params.rsid_maps && !skipRsid)) {
         error '--vcfs is required, and --rsid_maps is required unless --skip_rsid_annotation is true.'
     }
 
@@ -325,12 +334,11 @@ workflow {
         )
     }
 
-    def useDirectInputs = params.direct_inputs || params.fsx_direct
-    if (useDirectInputs && params.skip_rsid_annotation) {
+    if (directInputsEnabled && skipRsid) {
         directInputs = inputStrings.map { chr, vcf, map -> tuple(chr, vcf) }
         PREPROCESS_CHROMOSOME_DIRECT_NO_RSID(directInputs)
         chromosomePfiles = PREPROCESS_CHROMOSOME_DIRECT_NO_RSID.out.pfiles
-    } else if (useDirectInputs) {
+    } else if (directInputsEnabled) {
         PREPROCESS_CHROMOSOME_DIRECT(inputStrings)
         chromosomePfiles = PREPROCESS_CHROMOSOME_DIRECT.out.pfiles
     } else {
@@ -351,11 +359,11 @@ workflow {
     qcPfile = MISSINGNESS_QC.out.pfile
     SUMMARY_QC(qcPfile)
 
-    if (params.run_ancestry) {
+    if (ancestryEnabled) {
         ANCESTRY(qcPfile)
     }
 
-    if (params.run_scores) {
+    if (scoresEnabled) {
         if (!params.score_sheet) {
             error '--score_sheet is required when --run_scores is true'
         }
