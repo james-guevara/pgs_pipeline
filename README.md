@@ -131,7 +131,9 @@ apply its own preprocessing and missingness thresholds.
 `--direct_inputs` is executor-neutral: use it whenever controller and workers
 share the same absolute POSIX paths. Without it, Nextflow stages declared input
 files normally. Other schedulers can be added in a site-specific config passed
-with `-c`, without changing `main.nf`.
+with `-c`, without changing `main.nf`. An Expanse adapter is provided in
+`conf/expanse.config`; its account and queue are site policy, not workflow
+requirements.
 
 The Batch compute environment must be able to pull the ECR image. Its job role
 must be able to read inputs and read/write the work and output S3 prefixes. Do
