@@ -155,12 +155,21 @@ process CONCAT_CHROMOSOMES {
     """
     find . -maxdepth 1 -name 'chr*.pgen' -print | sed 's/\.pgen\$//' | sort -V > merge_list.txt
     test -s merge_list.txt
-    plink2 \
-      --pmerge-list merge_list.txt \
-      --make-pgen \
-      --out ${params.cohort} \
-      --threads ${task.cpus} \
-      --memory ${memMb}
+    if [ "\$(wc -l < merge_list.txt)" -eq 1 ]; then
+      plink2 \
+        --pfile "\$(head -n 1 merge_list.txt)" \
+        --make-pgen \
+        --out ${params.cohort} \
+        --threads ${task.cpus} \
+        --memory ${memMb}
+    else
+      plink2 \
+        --pmerge-list merge_list.txt \
+        --make-pgen \
+        --out ${params.cohort} \
+        --threads ${task.cpus} \
+        --memory ${memMb}
+    fi
     """
 }
 
