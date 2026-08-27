@@ -51,9 +51,9 @@ implementation for comparison testing.
 
 ## Run on AWS Batch
 
-`Dockerfile.aws` is a thin AWS derivative of the same PLINK2 Biocontainer. It
-adds AWS CLI for Nextflow's S3 staging and no scientific software. Build it in
-AWS and push it to ECR, then launch Nextflow with an IAM role:
+AWS uses the same PLINK2 Biocontainer. The Batch host AMI must install AWS CLI
+under `/opt/aws-cli`; Nextflow mounts it into each task for S3 staging. Mirror
+the public image to ECR if required by site policy, then launch with an IAM role:
 
 ```bash
 AWS_ACCOUNT_ID=123456789012
@@ -63,8 +63,8 @@ ECR_REPOSITORY=pgs-pipeline
 aws ecr get-login-password --region "$AWS_REGION" | \
   docker login --username AWS --password-stdin \
   "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-docker build -f Dockerfile.aws -t pgs-pipeline:latest .
-docker tag pgs-pipeline:latest \
+docker pull quay.io/biocontainers/plink2:2.0.0a.6.9--h9948957_0
+docker tag quay.io/biocontainers/plink2:2.0.0a.6.9--h9948957_0 \
   "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest"
 docker push \
   "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest"
