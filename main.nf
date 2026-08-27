@@ -46,8 +46,7 @@ process PREPROCESS_CHROMOSOME {
     tuple val(chr), path("chr${chr}.pgen"), path("chr${chr}.pvar"), path("chr${chr}.psam"), emit: pfiles
 
     script:
-    def infoFilter = params.r2 != null ? "--extract-if-info R2 >= ${params.r2}" :
-                     params.aq != null ? "--extract-if-info AQ >= ${params.aq}" : ''
+    def infoFilter = params.r2 != null ? "--extract-if-info R2 >= ${params.r2}" : (params.aq != null ? "--extract-if-info AQ >= ${params.aq}" : '')
     def memMb = Math.max(1000, (task.memory.toMega() as int) - 1000)
     """
     plink2 \
@@ -94,8 +93,7 @@ process PREPROCESS_CHROMOSOME_DIRECT {
     tuple val(chr), path("chr${chr}.pgen"), path("chr${chr}.pvar"), path("chr${chr}.psam"), emit: pfiles
 
     script:
-    def infoFilter = params.r2 != null ? "--extract-if-info R2 >= ${params.r2}" :
-                     params.aq != null ? "--extract-if-info AQ >= ${params.aq}" : ''
+    def infoFilter = params.r2 != null ? "--extract-if-info R2 >= ${params.r2}" : (params.aq != null ? "--extract-if-info AQ >= ${params.aq}" : '')
     def memMb = Math.max(1000, (task.memory.toMega() as int) - 1000)
     """
     test -r '${vcf}'
@@ -139,8 +137,7 @@ process PREPROCESS_CHROMOSOME_DIRECT_NO_RSID {
     tuple val(chr), path("chr${chr}.pgen"), path("chr${chr}.pvar"), path("chr${chr}.psam"), emit: pfiles
 
     script:
-    def infoFilter = params.r2 != null ? "--extract-if-info R2 >= ${params.r2}" :
-                     params.aq != null ? "--extract-if-info AQ >= ${params.aq}" : ''
+    def infoFilter = params.r2 != null ? "--extract-if-info R2 >= ${params.r2}" : (params.aq != null ? "--extract-if-info AQ >= ${params.aq}" : '')
     def memMb = Math.max(1000, (task.memory.toMega() as int) - 1000)
     """
     test -r '${vcf}'
