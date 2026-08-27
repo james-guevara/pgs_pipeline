@@ -29,7 +29,7 @@ URIs are supported. The existing rsID maps are available from
 
 ## Build and run locally
 
-Requirements: Java 17+, Nextflow 24.10+, and a running Docker daemon.
+Requirements: Java 17+, Nextflow 26.04+, and a running Docker daemon.
 
 ```bash
 docker build -t pgs-pipeline:latest .
