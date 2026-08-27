@@ -47,7 +47,7 @@ process PREPROCESS_CHROMOSOME {
 
     script:
     def infoFilter = params.r2 != null ? "--extract-if-info R2 >= ${params.r2}" : (params.aq != null ? "--extract-if-info AQ >= ${params.aq}" : '')
-    def memMb = Math.max(1000, (task.memory.toMega() as int) - 1000)
+    def memMb = Math.max(1000, task.memory.toMega() - 1000)
     """
     plink2 \
       --vcf ${vcf} \
@@ -94,7 +94,7 @@ process PREPROCESS_CHROMOSOME_DIRECT {
 
     script:
     def infoFilter = params.r2 != null ? "--extract-if-info R2 >= ${params.r2}" : (params.aq != null ? "--extract-if-info AQ >= ${params.aq}" : '')
-    def memMb = Math.max(1000, (task.memory.toMega() as int) - 1000)
+    def memMb = Math.max(1000, task.memory.toMega() - 1000)
     """
     test -r '${vcf}'
     plink2 \
@@ -138,7 +138,7 @@ process PREPROCESS_CHROMOSOME_DIRECT_NO_RSID {
 
     script:
     def infoFilter = params.r2 != null ? "--extract-if-info R2 >= ${params.r2}" : (params.aq != null ? "--extract-if-info AQ >= ${params.aq}" : '')
-    def memMb = Math.max(1000, (task.memory.toMega() as int) - 1000)
+    def memMb = Math.max(1000, task.memory.toMega() - 1000)
     """
     test -r '${vcf}'
     plink2 \
@@ -171,7 +171,7 @@ process CONCAT_CHROMOSOMES {
     tuple path("${params.cohort}.pgen"), path("${params.cohort}.pvar"), path("${params.cohort}.psam"), emit: pfile
 
     script:
-    def memMb = Math.max(1000, (task.memory.toMega() as int) - 2000)
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
     find . -maxdepth 1 -name 'chr*.pgen' -print | sed 's/\.pgen${'$'}//' | sort -V > merge_list.txt
     test -s merge_list.txt
@@ -208,7 +208,7 @@ process MISSINGNESS_QC {
 
     script:
     def inputPrefix = pgen.baseName
-    def memMb = Math.max(1000, (task.memory.toMega() as int) - 2000)
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
     plink2 --pfile ${inputPrefix} --missing --out pass1 --threads ${task.cpus} --memory ${memMb}
     awk 'NR>1 && ${'$'}5>${params.variant_miss} {print ${'$'}2}' pass1.vmiss > fail_variants.txt
@@ -239,7 +239,7 @@ process SUMMARY_QC {
 
     script:
     def inputPrefix = pgen.baseName
-    def memMb = Math.max(1000, (task.memory.toMega() as int) - 2000)
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
     plink2 --pfile ${inputPrefix} --missing --hardy --freq \
       --out ${params.cohort} --threads ${task.cpus} --memory ${memMb}
@@ -263,7 +263,7 @@ process SCORE_TRAIT {
 
     script:
     def inputPrefix = pgen.baseName
-    def memMb = Math.max(1000, (task.memory.toMega() as int) - 2000)
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
     plink2 \
       --pfile ${inputPrefix} \
@@ -287,7 +287,7 @@ process ANCESTRY {
 
     script:
     def inputPrefix = pgen.baseName
-    def memMb = Math.max(1000, (task.memory.toMega() as int) - 2000)
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
     def lastPc = 5 + params.num_pcs.toInteger()
     """
     mkdir ancestry
