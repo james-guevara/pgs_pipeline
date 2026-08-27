@@ -1,16 +1,11 @@
-FROM mambaorg/micromamba:2.0.5
+ARG AWS_CLI_VERSION=2.28.16
+FROM public.ecr.aws/aws-cli/aws-cli:${AWS_CLI_VERSION} AS awscli
 
-ARG MAMBA_DOCKERFILE_ACTIVATE=1
+FROM quay.io/biocontainers/plink2:2.0.0a.6.9--h9948957_0
 
-ENV PATH="/opt/conda/bin:${PATH}"
-
-RUN micromamba install -y -n base -c conda-forge -c bioconda \
-      python=3.12 plink=1.90b7.7 plink2=2.0.0a.6.9 polars=1.32 pyyaml=6.0 tomli=2.2 awscli=1.40 \
-    && micromamba clean --all --yes
-
-WORKDIR /opt/pgs_pipeline
-COPY config.py combine_scores.py PLINK_PIPELINE_*.py ./
-COPY sumstats/ ./sumstats/
+USER root
+COPY --from=awscli /usr/local/aws-cli/ /usr/local/aws-cli/
+RUN ln -s /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws
 
 ENTRYPOINT []
-CMD ["python", "--version"]
+CMD ["plink2", "--version"]

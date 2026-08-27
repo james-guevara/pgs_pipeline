@@ -10,8 +10,9 @@ Docker or AWS Batch.
 2. Concatenate chromosome pfiles into one cohort pfile.
 3. Apply two-pass variant and sample missingness QC.
 4. Produce missingness, Hardy-Weinberg, and allele-frequency summaries.
-5. Optionally calculate PGS values from SBayesRC `.snpRes` weights.
-6. Optionally run LD pruning, KING, PCA on unrelated samples, and projection of all samples.
+5. Optionally calculate PGS values from externally generated weight files.
+6. Run ancestry/PCA; this required final stage is temporarily gated while its
+   statistical design is reconsidered.
 
 The original Python and Slurm entrypoints remain for reference. `main.nf` is the
 portable orchestration entrypoint; cloud queues and filesystem mounts are
@@ -21,7 +22,8 @@ deployment profiles, not part of the scientific workflow.
 
 - One bgzipped VCF per chromosome.
 - One two-column rsID map per chromosome. Column 1 is the rsID and column 2 is the VCF variant ID.
-- For scoring, a tab-separated `trait<TAB>weight_file` sheet containing SBayesRC `.snpRes` files. See `examples/scores.tsv`.
+- For scoring, a tab-separated manifest with `trait`, `weights`, `id_col`,
+  `allele_col`, and `effect_col` columns. See `examples/scores.tsv`.
 
 Input patterns must contain the literal `{chr}` placeholder. Local paths and S3
 URIs are supported. The existing rsID maps are available from
@@ -32,8 +34,6 @@ URIs are supported. The existing rsID maps are available from
 Requirements: Java 17+, Nextflow 26.04+, and a running Docker daemon.
 
 ```bash
-docker build -t pgs-pipeline:latest .
-
 nextflow run main.nf -profile local \
   --vcfs 'vcfs/chr{chr}.dose.vcf.gz' \
   --rsid_maps 'rsid_maps/chr{chr}.map' \
@@ -44,13 +44,16 @@ Use `--chromosomes '1,2'` for a small test and add `-resume` to resume an
 interrupted run. Reports are written locally under `pipeline_info` (override
 with `--report_dir`).
 
-Enable scoring with `--run_scores true --score_sheet scores.tsv`. Disable the
-ancestry branch with `--run_ancestry false`.
+The local profile pulls the pinned PLINK2 Biocontainer directly. Enable scoring
+with `--run_scores true --score_sheet scores.tsv`. PCA is temporarily off by
+default while it is redesigned; `--run_ancestry true` enables the current
+implementation for comparison testing.
 
 ## Run on AWS Batch
 
-Build the image, push it to ECR, then launch Nextflow from a machine with AWS
-credentials or an IAM role:
+The `Dockerfile` is a thin AWS derivative of the same PLINK2 Biocontainer. It
+adds AWS CLI for Nextflow's S3 staging and no scientific software. Build it in
+AWS and push it to ECR, then launch Nextflow with an IAM role:
 
 ```bash
 AWS_ACCOUNT_ID=123456789012
@@ -129,22 +132,22 @@ work directory, and AWS CLI in the task image ([Nextflow documentation](https://
 | `variant_miss` | `0.05` | Variant missingness threshold |
 | `sample_miss` | `0.05` | Sample missingness threshold |
 | `run_scores` | `false` | Run PLINK2 scoring branch |
-| `run_ancestry` | `true` | Run KING/PCA branch |
+| `run_ancestry` | `false` | Temporary gate for the required, pending-redesign KING/PCA stage |
 | `r2` / `aq` | unset | Optional VCF INFO filter; R2 takes precedence |
 
 Resource defaults live in `nextflow.config` and can be overridden with `-c`.
 `config.toml.example` is only for the legacy Python entrypoints.
 
-## SBayesRC boundary and open decisions
+## Weight-generation boundary
 
-The Nextflow workflow consumes completed SBayesRC `.snpRes` weights; it does not
-yet generate them. The existing `sbayesrc/` job requires a GCTB image, UKB EUR
-HM3 LD reference, and baseline annotation file that are not in this repository.
+Weight generation is intentionally upstream of this workflow. SBayesRC,
+PRS-CS, published PGS Catalog weights, or another method can run elsewhere. The
+score manifest tells PLINK2 which one-based columns contain variant ID, effect
+allele, and effect size, so the scoring branch is not tied to GCTB `.snpRes`.
 
-Settle these items before adding SBayesRC as an AWS process:
+The pipeline does not currently normalize allele conventions across arbitrary
+weight formats; weight files must already be harmonized to the cohort build and
+variant identifiers. The legacy `sbayesrc/` scripts remain as reference only.
 
-- Approved GCTB/SBayesRC image and redistribution terms.
-- S3 locations for the LD matrix and annotations, and whether tasks stage them or use a shared filesystem.
-- Whether the problematic 2024 PTSD input skips imputation, uses older weights, or is repaired around chromosome 8.
-- Batch queue sizing and whether Spot instances are acceptable.
-- Whether cohorts have multiple imputation batches. The legacy `01d` batch merge is not in `main.nf`; inputs are currently one VCF per chromosome.
+The legacy `01d` multi-batch merge is also not represented in `main.nf`; inputs
+are currently one VCF per chromosome.

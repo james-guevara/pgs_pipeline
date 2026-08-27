@@ -7,7 +7,7 @@ params.cohort = 'cohort'
 params.outdir = 'results'
 params.score_sheet = null
 params.run_scores = false
-params.run_ancestry = true
+params.run_ancestry = false
 params.r2 = null
 params.aq = null
 params.mac = 10
@@ -259,7 +259,7 @@ process SCORE_TRAIT {
     publishDir "${params.outdir}/05_scores", mode: 'copy'
 
     input:
-    tuple val(trait), path(weights), path(pgen), path(pvar), path(psam)
+    tuple val(trait), path(weights), val(id_col), val(allele_col), val(effect_col), path(pgen), path(pvar), path(psam)
 
     output:
     tuple val(trait), path("${trait}.sscore"), emit: scores
@@ -271,7 +271,7 @@ process SCORE_TRAIT {
     """
     plink2 \
       --pfile ${inputPrefix} \
-      --score ${weights} 2 5 8 header center list-variants no-mean-imputation \
+      --score ${weights} ${id_col} ${allele_col} ${effect_col} header center list-variants no-mean-imputation \
       --out ${trait} \
       --threads ${task.cpus} \
       --memory ${memMb}
@@ -368,11 +368,21 @@ workflow {
             error '--score_sheet is required when --run_scores is true'
         }
         weights = Channel.fromPath(params.score_sheet, checkIfExists: true)
-            .splitCsv(sep: '\t', strip: true)
-            .filter { row -> row && row[0] && !row[0].toString().startsWith('#') }
-            .map { row -> tuple(row[0].toString(), file(row[1].toString(), checkIfExists: true)) }
-        scoreInputs = weights.combine(qcPfile).map { trait, weight, pgen, pvar, psam ->
-            tuple(trait, weight, pgen, pvar, psam)
+            .splitCsv(header: true, sep: '\t', strip: true)
+            .map { row ->
+                if (!row.trait || !row.weights || !row.id_col || !row.allele_col || !row.effect_col) {
+                    error 'Score sheet requires trait, weights, id_col, allele_col, and effect_col columns'
+                }
+                tuple(
+                    row.trait.toString(),
+                    file(row.weights.toString(), checkIfExists: true),
+                    row.id_col.toString().toInteger(),
+                    row.allele_col.toString().toInteger(),
+                    row.effect_col.toString().toInteger()
+                )
+            }
+        scoreInputs = weights.combine(qcPfile).map { trait, weight, idCol, alleleCol, effectCol, pgen, pvar, psam ->
+            tuple(trait, weight, idCol, alleleCol, effectCol, pgen, pvar, psam)
         }
         SCORE_TRAIT(scoreInputs)
     }
