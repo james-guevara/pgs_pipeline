@@ -51,7 +51,7 @@ implementation for comparison testing.
 
 ## Run on AWS Batch
 
-The `Dockerfile` is a thin AWS derivative of the same PLINK2 Biocontainer. It
+`Dockerfile.aws` is a thin AWS derivative of the same PLINK2 Biocontainer. It
 adds AWS CLI for Nextflow's S3 staging and no scientific software. Build it in
 AWS and push it to ECR, then launch Nextflow with an IAM role:
 
@@ -63,6 +63,7 @@ ECR_REPOSITORY=pgs-pipeline
 aws ecr get-login-password --region "$AWS_REGION" | \
   docker login --username AWS --password-stdin \
   "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+docker build -f Dockerfile.aws -t pgs-pipeline:latest .
 docker tag pgs-pipeline:latest \
   "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest"
 docker push \
