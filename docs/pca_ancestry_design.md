@@ -76,3 +76,7 @@ and projected coordinates and labels for all 3,202 reference samples. Its Extra
 Trees classifier achieved 99.66% leave-one-population-out accuracy. At the 0.8
 probability threshold, it assigned 94.72% of validation samples with 99.84%
 accuracy. See `examples/pca_reference_expanse.tsv`.
+
+The same checksummed release is mirrored at
+`s3://sebat-genomics-work/reference/pgs/1kg_grch38_v1/`; see
+`examples/pca_reference_aws.tsv`.
