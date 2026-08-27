@@ -509,19 +509,19 @@ workflow {
             Channel.value(file("${projectDir}/bin/validate_pca_reference.py"))
         )
         validatedReference = VALIDATE_PCA_REFERENCE.out.reference
-        panel = validatedReference.map { referenceId, build, panelFile, frequencies, loadings, classifier, metadata, checksums, validation -> panelFile }
-        frequencies = validatedReference.map { referenceId, build, panelFile, frequencies, loadings, classifier, metadata, checksums, validation -> frequencies }
-        loadings = validatedReference.map { referenceId, build, panelFile, frequencies, loadings, classifier, metadata, checksums, validation -> loadings }
-        classifier = validatedReference.map { referenceId, build, panelFile, frequencies, loadings, classifier, metadata, checksums, validation -> classifier }
-        classifierMetadata = validatedReference.map { referenceId, build, panelFile, frequencies, loadings, classifier, metadata, checksums, validation -> metadata }
+        pcaPanelCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> panelFile }
+        pcaFrequenciesCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> refFrequencies }
+        pcaLoadingsCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> refLoadings }
+        pcaClassifierCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> refClassifier }
+        pcaClassifierMetadataCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> metadata }
 
-        HARMONIZE_PCA_PANEL(qcPfile, panel, Channel.value(file("${projectDir}/bin/harmonize_pca_panel.py")))
+        HARMONIZE_PCA_PANEL(qcPfile, pcaPanelCh, Channel.value(file("${projectDir}/bin/harmonize_pca_panel.py")))
         PREPARE_PCA_PFILE(HARMONIZE_PCA_PANEL.out.harmonized_inputs)
-        PROJECT_GLOBAL_PCS(PREPARE_PCA_PFILE.out.pfile, frequencies, loadings)
+        PROJECT_GLOBAL_PCS(PREPARE_PCA_PFILE.out.pfile, pcaFrequenciesCh, pcaLoadingsCh)
         CLASSIFY_ANCESTRY(
             PROJECT_GLOBAL_PCS.out.scores,
-            classifier,
-            classifierMetadata,
+            pcaClassifierCh,
+            pcaClassifierMetadataCh,
             Channel.value(file("${projectDir}/bin/apply_extra_trees.py"))
         )
     }
