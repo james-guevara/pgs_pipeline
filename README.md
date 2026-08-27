@@ -52,7 +52,7 @@ implementation for comparison testing.
 ## Run on AWS Batch
 
 AWS uses the same PLINK2 Biocontainer. The Batch host AMI must expose an AWS CLI
-launcher at `/opt/nxf-aws-cli/aws`; Nextflow mounts it into each task for S3
+launcher at `/opt/nxf-aws-cli/bin/aws`; Nextflow mounts it into each task for S3
 staging. Mirror
 the public image to ECR if required by site policy, then launch with an IAM role:
 
