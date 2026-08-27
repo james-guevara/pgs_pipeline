@@ -22,6 +22,7 @@ params.ld_window = 200
 params.ld_step = 50
 params.ld_r2 = 0.1
 params.fsx_direct = false
+params.skip_rsid_annotation = false
 
 def chromosomeList(value) {
     def text = value.toString()
@@ -96,9 +97,29 @@ process PREPROCESS_CHROMOSOME_FSX {
     def infoFilter = params.r2 != null ? "--extract-if-info R2 >= ${params.r2}" :
                      params.aq != null ? "--extract-if-info AQ >= ${params.aq}" : ''
     def memMb = Math.max(1000, (task.memory.toMega() as int) - 1000)
+    def annotationStep = params.skip_rsid_annotation ? """
+    plink2 \\
+      --pfile filtered \\
+      --maf ${params.maf} \\
+      --make-pgen \\
+      --out chr${chr} \\
+      --threads ${task.cpus} \\
+      --memory ${memMb}
+    """ : """
+    test -r '${rsid_map}'
+    awk '{print \$2}' '${rsid_map}' > mapped_ids.txt
+    plink2 \\
+      --pfile filtered \\
+      --update-name '${rsid_map}' 2 1 \\
+      --extract mapped_ids.txt \\
+      --maf ${params.maf} \\
+      --make-pgen \\
+      --out chr${chr} \\
+      --threads ${task.cpus} \\
+      --memory ${memMb}
+    """
     """
     test -r '${vcf}'
-    test -r '${rsid_map}'
     plink2 \
       --vcf '${vcf}' \
       --vcf-half-call missing \
@@ -114,16 +135,7 @@ process PREPROCESS_CHROMOSOME_FSX {
       --threads ${task.cpus} \
       --memory ${memMb}
 
-    awk '{print \$2}' '${rsid_map}' > mapped_ids.txt
-    plink2 \
-      --pfile filtered \
-      --update-name '${rsid_map}' 2 1 \
-      --extract mapped_ids.txt \
-      --maf ${params.maf} \
-      --make-pgen \
-      --out chr${chr} \
-      --threads ${task.cpus} \
-      --memory ${memMb}
+    ${annotationStep}
     """
 }
 
@@ -271,8 +283,8 @@ process ANCESTRY {
 }
 
 workflow {
-    if (!params.vcfs || !params.rsid_maps) {
-        error 'Both --vcfs and --rsid_maps are required (for example, s3://bucket/vcfs/chr{chr}.dose.vcf.gz).'
+    if (!params.vcfs || (!params.rsid_maps && !params.skip_rsid_annotation)) {
+        error '--vcfs is required, and --rsid_maps is required unless --skip_rsid_annotation is true.'
     }
 
     def chromosomes = chromosomeList(params.chromosomes)
@@ -280,7 +292,7 @@ workflow {
         tuple(
             chr,
             params.vcfs.toString().replace('{chr}', chr.toString()),
-            params.rsid_maps.toString().replace('{chr}', chr.toString())
+            params.rsid_maps ? params.rsid_maps.toString().replace('{chr}', chr.toString()) : ''
         )
     }
 

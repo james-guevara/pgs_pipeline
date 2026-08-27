@@ -90,6 +90,9 @@ nextflow run main.nf -profile awsbatch_fsx \
 ```
 
 The Batch compute environment launch template must mount FSx at `--fsx_mount`.
+For an infrastructure-only smoke test, `--skip_rsid_annotation true` permits
+conversion and QC without an rsID map. Do not use that option for PGS scoring,
+which requires variants to be aligned to the weight files by rsID.
 
 The Batch compute environment must be able to pull the ECR image. Its job role
 must be able to read inputs and read/write the work and output S3 prefixes. Do
