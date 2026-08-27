@@ -4,6 +4,7 @@ params.vcfs = null
 params.rsid_maps = null
 params.chromosomes = '1..22'
 params.cohort = 'cohort'
+params.genome_build = 'GRCh38'
 params.outdir = 'results'
 params.score_sheet = null
 params.run_scores = false
@@ -19,6 +20,7 @@ params.variant_miss = 0.05
 params.num_pcs = 10
 params.min_pca_variant_overlap = 0.90
 params.min_ancestry_samples = 50
+params.python_container = 'python:3.11-slim'
 params.fsx_direct = false
 params.direct_inputs = false
 params.skip_rsid_annotation = false
@@ -276,17 +278,160 @@ process SCORE_TRAIT {
     """
 }
 
+process HARMONIZE_PCA_PANEL {
+    tag params.cohort
+    label 'small'
+    container params.python_container
+    publishDir "${params.outdir}/06_pca/harmonization", mode: 'copy', pattern: 'panel_overlap*.tsv'
+
+    input:
+    tuple path(pgen), path(pvar), path(psam)
+    path panel
+    path harmonizer
+
+    output:
+    tuple path(pgen), path(pvar), path(psam), path('usable_cohort_ids.txt'),
+      path('rename_to_panel_ids.tsv'), path('reference_alleles.tsv'), emit: harmonized_inputs
+    path 'panel_overlap.tsv', emit: overlap
+    path 'panel_overlap_summary.tsv', emit: summary
+
+    script:
+    """
+    python ${harmonizer} \
+      --panel ${panel} \
+      --cohort-pvar ${pvar} \
+      --min-overlap ${params.min_pca_variant_overlap} \
+      --output-dir .
+    """
+}
+
+process VALIDATE_PCA_REFERENCE {
+    tag reference_id
+    label 'small'
+    container params.python_container
+    publishDir "${params.outdir}/06_pca/provenance", mode: 'copy', pattern: 'reference_validation.tsv'
+
+    input:
+    tuple val(reference_id), val(genome_build), path(panel), path(allele_frequencies),
+      path(loadings), path(classifier), path(classifier_metadata), path(checksums)
+    path validator
+
+    output:
+    tuple val(reference_id), val(genome_build), path(panel), path(allele_frequencies),
+      path(loadings), path(classifier), path(classifier_metadata), path(checksums),
+      path('reference_validation.tsv'), emit: reference
+
+    script:
+    """
+    python ${validator} \
+      --checksums ${checksums} \
+      --artifact ${panel} \
+      --artifact ${allele_frequencies} \
+      --artifact ${loadings} \
+      --artifact ${classifier} \
+      --artifact ${classifier_metadata} \
+      --output reference_validation.tsv
+    """
+}
+
+process PREPARE_PCA_PFILE {
+    tag params.cohort
+    label 'large'
+
+    input:
+    tuple path(pgen), path(pvar), path(psam), path(usable_ids), path(rename_map), path(reference_alleles)
+
+    output:
+    tuple path('pca_input.pgen'), path('pca_input.pvar'), path('pca_input.psam'), emit: pfile
+
+    script:
+    def inputPrefix = pgen.baseName
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
+    """
+    plink2 \
+      --pfile ${inputPrefix} \
+      --extract ${usable_ids} \
+      --update-name ${rename_map} 1 2 \
+      --make-pgen \
+      --out renamed \
+      --threads ${task.cpus} \
+      --memory ${memMb}
+
+    plink2 \
+      --pfile renamed \
+      --ref-allele ${reference_alleles} 2 1 \
+      --make-pgen \
+      --out pca_input \
+      --threads ${task.cpus} \
+      --memory ${memMb}
+    """
+}
+
+process PROJECT_GLOBAL_PCS {
+    tag params.cohort
+    label 'large'
+    publishDir "${params.outdir}/06_pca/global", mode: 'copy'
+
+    input:
+    tuple path(pgen), path(pvar), path(psam)
+    path allele_frequencies
+    path loadings
+
+    output:
+    path 'global_pcs.tsv', emit: scores
+    path 'projection_variants.txt', emit: variants
+
+    script:
+    def inputPrefix = pgen.baseName
+    def lastPc = 5 + params.num_pcs.toInteger()
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
+    """
+    plink2 \
+      --pfile ${inputPrefix} \
+      --read-freq ${allele_frequencies} \
+      --score ${loadings} 2 5 header-read no-mean-imputation variance-standardize list-variants \
+      --score-col-nums 6-${lastPc} \
+      --out projection \
+      --threads ${task.cpus} \
+      --memory ${memMb}
+    cp projection.sscore global_pcs.tsv
+    cp projection.sscore.vars projection_variants.txt
+    """
+}
+
+process CLASSIFY_ANCESTRY {
+    tag params.cohort
+    label 'small'
+    container params.python_container
+    publishDir "${params.outdir}/06_pca/ancestry", mode: 'copy'
+
+    input:
+    path global_pcs
+    path classifier
+    path classifier_metadata
+    path classifier_script
+
+    output:
+    path 'ancestry_probabilities.tsv', emit: assignments
+
+    script:
+    """
+    python ${classifier_script} \
+      --scores ${global_pcs} \
+      --model ${classifier} \
+      --classifier-metadata ${classifier_metadata} \
+      --output ancestry_probabilities.tsv
+    """
+}
+
 workflow {
     def skipRsid = flagEnabled(params.skip_rsid_annotation)
     def directInputsEnabled = flagEnabled(params.direct_inputs) || flagEnabled(params.fsx_direct)
     def pcaEnabled = flagEnabled(params.run_pca)
     def scoresEnabled = flagEnabled(params.run_scores)
 
-    if (pcaEnabled) {
-        if (!params.pca_reference_sheet) {
-            error '--pca_reference_sheet is required when --run_pca is true'
-        }
-        error 'Fixed-reference PCA is specified but not implemented yet; see docs/pca_ancestry_design.md. The former cohort-derived PCA has been removed intentionally.'
+    if (pcaEnabled && !params.pca_reference_sheet) {
+        error '--pca_reference_sheet is required when --run_pca is true'
     }
 
     if (!params.vcfs || (!params.rsid_maps && !skipRsid)) {
@@ -326,6 +471,60 @@ workflow {
 
     qcPfile = MISSINGNESS_QC.out.pfile
     SUMMARY_QC(qcPfile)
+
+    if (pcaEnabled) {
+        pcaReference = Channel.fromPath(params.pca_reference_sheet, checkIfExists: true)
+            .splitCsv(header: true, sep: '\t', strip: true)
+            .map { row ->
+                def required = ['reference_id', 'genome_build', 'panel_variants', 'allele_frequencies',
+                    'loadings', 'classifier', 'classifier_metadata', 'checksums']
+                def missing = required.findAll { !row[it] }
+                if (missing) {
+                    error "PCA reference sheet missing values: ${missing.join(', ')}"
+                }
+                if (row.genome_build.toString() != params.genome_build.toString()) {
+                    error "Cohort genome build ${params.genome_build} does not match PCA reference build ${row.genome_build}"
+                }
+                tuple(
+                    row.reference_id.toString(),
+                    row.genome_build.toString(),
+                    file(row.panel_variants.toString(), checkIfExists: true),
+                    file(row.allele_frequencies.toString(), checkIfExists: true),
+                    file(row.loadings.toString(), checkIfExists: true),
+                    file(row.classifier.toString(), checkIfExists: true),
+                    file(row.classifier_metadata.toString(), checkIfExists: true),
+                    file(row.checksums.toString(), checkIfExists: true)
+                )
+            }
+            .collect()
+            .map { rows ->
+                if (rows.size() != 1) {
+                    error 'PCA reference sheet must contain exactly one data row'
+                }
+                rows[0]
+            }
+
+        VALIDATE_PCA_REFERENCE(
+            pcaReference,
+            Channel.value(file("${projectDir}/bin/validate_pca_reference.py"))
+        )
+        validatedReference = VALIDATE_PCA_REFERENCE.out.reference
+        panel = validatedReference.map { referenceId, build, panelFile, frequencies, loadings, classifier, metadata, checksums, validation -> panelFile }
+        frequencies = validatedReference.map { referenceId, build, panelFile, frequencies, loadings, classifier, metadata, checksums, validation -> frequencies }
+        loadings = validatedReference.map { referenceId, build, panelFile, frequencies, loadings, classifier, metadata, checksums, validation -> loadings }
+        classifier = validatedReference.map { referenceId, build, panelFile, frequencies, loadings, classifier, metadata, checksums, validation -> classifier }
+        classifierMetadata = validatedReference.map { referenceId, build, panelFile, frequencies, loadings, classifier, metadata, checksums, validation -> metadata }
+
+        HARMONIZE_PCA_PANEL(qcPfile, panel, Channel.value(file("${projectDir}/bin/harmonize_pca_panel.py")))
+        PREPARE_PCA_PFILE(HARMONIZE_PCA_PANEL.out.harmonized_inputs)
+        PROJECT_GLOBAL_PCS(PREPARE_PCA_PFILE.out.pfile, frequencies, loadings)
+        CLASSIFY_ANCESTRY(
+            PROJECT_GLOBAL_PCS.out.scores,
+            classifier,
+            classifierMetadata,
+            Channel.value(file("${projectDir}/bin/apply_extra_trees.py"))
+        )
+    }
 
     if (scoresEnabled) {
         if (!params.score_sheet) {

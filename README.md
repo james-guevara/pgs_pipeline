@@ -11,8 +11,8 @@ run unchanged with local Docker or AWS Batch.
 3. Apply two-pass variant and sample missingness QC.
 4. Produce missingness, Hardy-Weinberg, and allele-frequency summaries.
 5. Optionally calculate PGS values from externally generated weight files.
-6. Project onto a fixed 1000 Genomes PCA reference, assign ancestry, and derive
-   within-ancestry PCs. This required stage is specified but not implemented yet.
+6. Project onto a fixed 1000 Genomes PCA reference and assign ancestry with
+   probabilities. Within-ancestry PCs are the remaining required PCA stage.
 
 The original Python and Slurm entrypoints remain for reference. `main.nf` is the
 portable orchestration entrypoint; cloud queues and filesystem mounts are
@@ -45,9 +45,10 @@ interrupted run. Reports are written locally under `pipeline_info` (override
 with `--report_dir`).
 
 The local profile pulls the pinned PLINK2 Biocontainer directly. Enable scoring
-with `--run_scores true --score_sheet scores.tsv`. The PCA contract is described
-in `docs/pca_ancestry_design.md`; the previous cohort-derived PCA implementation
-has been removed because it did not implement 1000 Genomes projection.
+with `--run_scores true --score_sheet scores.tsv`. Enable fixed-reference PCA
+with `--run_pca true --pca_reference_sheet pca_reference.tsv`. The PCA contract
+is described in `docs/pca_ancestry_design.md`; the previous cohort-derived PCA
+implementation was removed because it did not implement 1000 Genomes projection.
 
 ## Run on AWS Batch
 
@@ -128,13 +129,14 @@ work directory, and AWS CLI in the task image ([Nextflow documentation](https://
 |---|---:|---|
 | `chromosomes` | `1..22` | Inclusive range or comma-separated list |
 | `cohort` | `cohort` | Output prefix |
+| `genome_build` | `GRCh38` | Cohort genome build; must match the PCA reference |
 | `mac` | `10` | Minimum allele count |
 | `geno` | `0.05` | Initial genotype missingness threshold |
 | `maf` | `0.01` | Initial minor allele frequency threshold |
 | `variant_miss` | `0.05` | Variant missingness threshold |
 | `sample_miss` | `0.05` | Sample missingness threshold |
 | `run_scores` | `false` | Run PLINK2 scoring branch |
-| `run_pca` | `false` | Run required fixed-reference PCA once implemented |
+| `run_pca` | `false` | Run reference validation, harmonization, global projection, and ancestry assignment |
 | `pca_reference_sheet` | unset | One-row reference artifact manifest; see `examples/pca_reference.tsv` |
 | `num_pcs` | `10` | Number of global reference PCs to project |
 | `min_pca_variant_overlap` | `0.90` | Minimum usable fraction of the fixed PCA panel |

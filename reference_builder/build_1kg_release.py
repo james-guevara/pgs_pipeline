@@ -54,7 +54,7 @@ def new_classifier():
 def classifier_json(model, pc_columns, threshold):
     return {
         "model_type": "sklearn_extra_trees",
-        "model_file": "classifier.joblib",
+        "model_file": "classifier_model.json",
         "pc_columns": pc_columns,
         "classes": model.classes_.tolist(),
         "n_estimators": model.n_estimators,
@@ -64,6 +64,25 @@ def classifier_json(model, pc_columns, threshold):
         "scikit_learn_version": sklearn.__version__,
         "assignment_probability_threshold": threshold,
         "uncertain_label": "ADMIXED_OR_UNCERTAIN",
+    }
+
+
+def portable_extra_trees(model, pc_columns):
+    trees = []
+    for estimator in model.estimators_:
+        tree = estimator.tree_
+        trees.append({
+            "children_left": tree.children_left.tolist(),
+            "children_right": tree.children_right.tolist(),
+            "feature": tree.feature.tolist(),
+            "threshold": tree.threshold.tolist(),
+            "value": tree.value[:, 0, :].tolist(),
+        })
+    return {
+        "format": "pgs_pipeline_extra_trees_v1",
+        "features": pc_columns,
+        "classes": model.classes_.tolist(),
+        "trees": trees,
     }
 
 
@@ -196,6 +215,11 @@ def main():
     model_path = output / "classifier.joblib"
     joblib.dump(final_model, model_path)
     copied["classifier_joblib"] = model_path
+    portable_tree_path = output / "classifier_model.json"
+    portable_tree_path.write_text(json.dumps(
+        portable_extra_trees(final_model, pc_columns), separators=(",", ":")
+    ) + "\n")
+    copied["classifier_model"] = portable_tree_path
     portable_model_path = output / "classifier.json"
     portable_model_path.write_text(json.dumps(
         classifier_json(final_model, pc_columns, args.probability_threshold),
@@ -237,7 +261,7 @@ def main():
         "loadings": copied["loadings"].name,
         "reference_scores": copied["reference_scores"].name,
         "ancestry_labels": labels_path.name,
-        "classifier": model_path.name,
+        "classifier": portable_tree_path.name,
         "classifier_metadata": portable_model_path.name,
         "checksums": checksums_path.name,
     }

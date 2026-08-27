@@ -13,6 +13,7 @@ by holding out each of the 26 constituent populations in turn. It achieved
 99.66% overall accuracy; at the 0.8 assignment threshold, coverage was 94.72%
 and assigned-sample accuracy was 99.84%.
 
-`classifier.joblib` requires the exact scikit-learn runtime recorded in
-`release_metadata.json`. The pipeline classifier process must use a pinned
-environment rather than the PLINK2 container.
+`classifier.joblib` preserves the original fitted object and requires the exact
+scikit-learn runtime recorded in `release_metadata.json`. Cohort inference uses
+the runtime-neutral `classifier_model.json`, so it only requires standard
+Python and does not load scikit-learn.
