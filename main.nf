@@ -7,7 +7,8 @@ params.cohort = 'cohort'
 params.outdir = 'results'
 params.score_sheet = null
 params.run_scores = false
-params.run_ancestry = false
+params.run_pca = false
+params.pca_reference_sheet = null
 params.r2 = null
 params.aq = null
 params.mac = 10
@@ -15,12 +16,9 @@ params.geno = 0.05
 params.maf = 0.01
 params.sample_miss = 0.05
 params.variant_miss = 0.05
-params.ancestry_maf = 0.05
-params.king_cutoff = 0.0884
 params.num_pcs = 10
-params.ld_window = 200
-params.ld_step = 50
-params.ld_r2 = 0.1
+params.min_pca_variant_overlap = 0.90
+params.min_ancestry_samples = 50
 params.fsx_direct = false
 params.direct_inputs = false
 params.skip_rsid_annotation = false
@@ -278,48 +276,18 @@ process SCORE_TRAIT {
     """
 }
 
-process ANCESTRY {
-    tag params.cohort
-    label 'large'
-    publishDir "${params.outdir}/06_ancestry", mode: 'copy'
-
-    input:
-    tuple path(pgen), path(pvar), path(psam)
-
-    output:
-    path 'ancestry/*'
-
-    script:
-    def inputPrefix = pgen.baseName
-    def memMb = Math.max(1000, task.memory.toMega() - 2000)
-    def lastPc = 5 + params.num_pcs.toInteger()
-    """
-    mkdir ancestry
-    plink2 --pfile ${inputPrefix} --maf ${params.ancestry_maf} --make-pgen \
-      --out ancestry/maf --threads ${task.cpus} --memory ${memMb}
-    plink2 --pfile ancestry/maf --indep-pairwise ${params.ld_window} ${params.ld_step} ${params.ld_r2} \
-      --out ancestry/prune --threads ${task.cpus} --memory ${memMb}
-    plink2 --pfile ancestry/maf --extract ancestry/prune.prune.in --make-pgen \
-      --out ancestry/pruned --threads ${task.cpus} --memory ${memMb}
-    plink2 --pfile ancestry/pruned --make-king-table --out ancestry/king \
-      --threads ${task.cpus} --memory ${memMb}
-    plink2 --pfile ancestry/pruned --king-cutoff ${params.king_cutoff} --make-just-fam \
-      --out ancestry/unrelateds --threads ${task.cpus} --memory ${memMb}
-    plink2 --pfile ancestry/pruned --keep ancestry/unrelateds.king.cutoff.in.id \
-      --freq counts --pca ${params.num_pcs} allele-wts vcols=chrom,ref,alt \
-      --out ancestry/ref --threads ${task.cpus} --memory ${memMb}
-    plink2 --pfile ancestry/pruned --read-freq ancestry/ref.acount \
-      --score ancestry/ref.eigenvec.allele 2 5 header-read no-mean-imputation variance-standardize \
-      --score-col-nums 6-${lastPc} --out ancestry/${params.cohort} \
-      --threads ${task.cpus} --memory ${memMb}
-    """
-}
-
 workflow {
     def skipRsid = flagEnabled(params.skip_rsid_annotation)
     def directInputsEnabled = flagEnabled(params.direct_inputs) || flagEnabled(params.fsx_direct)
-    def ancestryEnabled = flagEnabled(params.run_ancestry)
+    def pcaEnabled = flagEnabled(params.run_pca)
     def scoresEnabled = flagEnabled(params.run_scores)
+
+    if (pcaEnabled) {
+        if (!params.pca_reference_sheet) {
+            error '--pca_reference_sheet is required when --run_pca is true'
+        }
+        error 'Fixed-reference PCA is specified but not implemented yet; see docs/pca_ancestry_design.md. The former cohort-derived PCA has been removed intentionally.'
+    }
 
     if (!params.vcfs || (!params.rsid_maps && !skipRsid)) {
         error '--vcfs is required, and --rsid_maps is required unless --skip_rsid_annotation is true.'
@@ -358,10 +326,6 @@ workflow {
 
     qcPfile = MISSINGNESS_QC.out.pfile
     SUMMARY_QC(qcPfile)
-
-    if (ancestryEnabled) {
-        ANCESTRY(qcPfile)
-    }
 
     if (scoresEnabled) {
         if (!params.score_sheet) {

@@ -1,8 +1,8 @@
 # PGS pipeline
 
 Containerized Nextflow pipeline for VCF filtering, rsID annotation, genome-wide
-QC, polygenic scoring, relatedness, and PCA. It can run unchanged with local
-Docker or AWS Batch.
+QC, polygenic scoring, and a specified fixed-reference PCA interface. It can
+run unchanged with local Docker or AWS Batch.
 
 ## Workflow
 
@@ -11,8 +11,8 @@ Docker or AWS Batch.
 3. Apply two-pass variant and sample missingness QC.
 4. Produce missingness, Hardy-Weinberg, and allele-frequency summaries.
 5. Optionally calculate PGS values from externally generated weight files.
-6. Run ancestry/PCA; this required final stage is temporarily gated while its
-   statistical design is reconsidered.
+6. Project onto a fixed 1000 Genomes PCA reference, assign ancestry, and derive
+   within-ancestry PCs. This required stage is specified but not implemented yet.
 
 The original Python and Slurm entrypoints remain for reference. `main.nf` is the
 portable orchestration entrypoint; cloud queues and filesystem mounts are
@@ -45,9 +45,9 @@ interrupted run. Reports are written locally under `pipeline_info` (override
 with `--report_dir`).
 
 The local profile pulls the pinned PLINK2 Biocontainer directly. Enable scoring
-with `--run_scores true --score_sheet scores.tsv`. PCA is temporarily off by
-default while it is redesigned; `--run_ancestry true` enables the current
-implementation for comparison testing.
+with `--run_scores true --score_sheet scores.tsv`. The PCA contract is described
+in `docs/pca_ancestry_design.md`; the previous cohort-derived PCA implementation
+has been removed because it did not implement 1000 Genomes projection.
 
 ## Run on AWS Batch
 
@@ -134,7 +134,11 @@ work directory, and AWS CLI in the task image ([Nextflow documentation](https://
 | `variant_miss` | `0.05` | Variant missingness threshold |
 | `sample_miss` | `0.05` | Sample missingness threshold |
 | `run_scores` | `false` | Run PLINK2 scoring branch |
-| `run_ancestry` | `false` | Temporary gate for the required, pending-redesign KING/PCA stage |
+| `run_pca` | `false` | Run required fixed-reference PCA once implemented |
+| `pca_reference_sheet` | unset | One-row reference artifact manifest; see `examples/pca_reference.tsv` |
+| `num_pcs` | `10` | Number of global reference PCs to project |
+| `min_pca_variant_overlap` | `0.90` | Minimum usable fraction of the fixed PCA panel |
+| `min_ancestry_samples` | `50` | Minimum group size for within-ancestry PCA |
 | `r2` / `aq` | unset | Optional VCF INFO filter; R2 takes precedence |
 
 Resource defaults live in `nextflow.config` and can be overridden with `-c`.
@@ -153,3 +157,6 @@ variant identifiers. The legacy `sbayesrc/` scripts remain as reference only.
 
 The legacy `01d` multi-batch merge is also not represented in `main.nf`; inputs
 are currently one VCF per chromosome.
+
+Dataset-specific preparation, including G2MH WGS/GSA harmonization, is upstream
+of this workflow. A pipeline run receives one coherent cohort dataset.
