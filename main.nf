@@ -22,6 +22,7 @@ params.ld_window = 200
 params.ld_step = 50
 params.ld_r2 = 0.1
 params.fsx_direct = false
+params.direct_inputs = false
 params.skip_rsid_annotation = false
 
 def chromosomeList(value) {
@@ -57,14 +58,14 @@ process PREPROCESS_CHROMOSOME {
       --var-filter \
       --mac ${params.mac} \
       --geno ${params.geno} \
-      --set-all-var-ids '@:#:\$r:\$a' \
+      --set-all-var-ids '@:#:${'$'}r:${'$'}a' \
       ${infoFilter} \
       --make-pgen \
       --out filtered \
       --threads ${task.cpus} \
       --memory ${memMb}
 
-    awk '{print \$2}' ${rsid_map} > mapped_ids.txt
+    awk '{print ${'$'}2}' ${rsid_map} > mapped_ids.txt
     plink2 \
       --pfile filtered \
       --update-name ${rsid_map} 2 1 \
@@ -78,11 +79,10 @@ process PREPROCESS_CHROMOSOME {
 }
 
 /*
- * FSx inputs are passed as values so Nextflow does not copy chromosome-scale
- * files through its S3 work directory. The AWS Batch compute environment must
- * mount the same absolute path inside every task container.
+ * Inputs on a shared filesystem are passed as values so Nextflow does not copy
+ * chromosome-scale files. Every worker must see the same absolute paths.
  */
-process PREPROCESS_CHROMOSOME_FSX {
+process PREPROCESS_CHROMOSOME_DIRECT {
     tag "chr${chr}"
     label 'small'
     publishDir "${params.outdir}/01_chromosomes", mode: 'copy', pattern: 'chr*.*'
@@ -107,14 +107,14 @@ process PREPROCESS_CHROMOSOME_FSX {
       --var-filter \
       --mac ${params.mac} \
       --geno ${params.geno} \
-      --set-all-var-ids '@:#:\$r:\$a' \
+      --set-all-var-ids '@:#:${'$'}r:${'$'}a' \
       ${infoFilter} \
       --make-pgen \
       --out filtered \
       --threads ${task.cpus} \
       --memory ${memMb}
 
-    awk '{print \$2}' '${rsid_map}' > mapped_ids.txt
+    awk '{print ${'$'}2}' '${rsid_map}' > mapped_ids.txt
     plink2 \
       --pfile filtered \
       --update-name '${rsid_map}' 2 1 \
@@ -127,7 +127,7 @@ process PREPROCESS_CHROMOSOME_FSX {
     """
 }
 
-process PREPROCESS_CHROMOSOME_FSX_NO_RSID {
+process PREPROCESS_CHROMOSOME_DIRECT_NO_RSID {
     tag "chr${chr}"
     label 'small'
     publishDir "${params.outdir}/01_chromosomes", mode: 'copy', pattern: 'chr*.*'
@@ -152,7 +152,7 @@ process PREPROCESS_CHROMOSOME_FSX_NO_RSID {
       --var-filter \
       --mac ${params.mac} \
       --geno ${params.geno} \
-      --set-all-var-ids '@:#:\$r:\$a' \
+      --set-all-var-ids '@:#:${'$'}r:${'$'}a' \
       ${infoFilter} \
       --maf ${params.maf} \
       --make-pgen \
@@ -176,11 +176,11 @@ process CONCAT_CHROMOSOMES {
     script:
     def memMb = Math.max(1000, (task.memory.toMega() as int) - 2000)
     """
-    find . -maxdepth 1 -name 'chr*.pgen' -print | sed 's/\.pgen\$//' | sort -V > merge_list.txt
+    find . -maxdepth 1 -name 'chr*.pgen' -print | sed 's/\.pgen${'$'}//' | sort -V > merge_list.txt
     test -s merge_list.txt
-    if [ "\$(wc -l < merge_list.txt)" -eq 1 ]; then
+    if [ "${'$'}(wc -l < merge_list.txt)" -eq 1 ]; then
       plink2 \
-        --pfile "\$(head -n 1 merge_list.txt)" \
+        --pfile "${'$'}(head -n 1 merge_list.txt)" \
         --make-pgen \
         --out ${params.cohort} \
         --threads ${task.cpus} \
@@ -214,9 +214,9 @@ process MISSINGNESS_QC {
     def memMb = Math.max(1000, (task.memory.toMega() as int) - 2000)
     """
     plink2 --pfile ${inputPrefix} --missing --out pass1 --threads ${task.cpus} --memory ${memMb}
-    awk 'NR>1 && \$5>${params.variant_miss} {print \$2}' pass1.vmiss > fail_variants.txt
+    awk 'NR>1 && ${'$'}5>${params.variant_miss} {print ${'$'}2}' pass1.vmiss > fail_variants.txt
     plink2 --pfile ${inputPrefix} --exclude fail_variants.txt --missing --out pass2 --threads ${task.cpus} --memory ${memMb}
-    awk 'NR>1 && \$4>${params.sample_miss} {print \$1, \$2}' pass2.smiss > fail_samples.txt
+    awk 'NR>1 && ${'$'}4>${params.sample_miss} {print ${'$'}1, ${'$'}2}' pass2.smiss > fail_samples.txt
     plink2 \
       --pfile ${inputPrefix} \
       --exclude fail_variants.txt \
@@ -247,8 +247,8 @@ process SUMMARY_QC {
     plink2 --pfile ${inputPrefix} --missing --hardy --freq \
       --out ${params.cohort} --threads ${task.cpus} --memory ${memMb}
     printf 'Metric\\tCount\\nSamples\\t%s\\nVariants\\t%s\\n' \
-      "\$(awk 'END {print NR-1}' ${params.cohort}.smiss)" \
-      "\$(awk 'END {print NR-1}' ${params.cohort}.vmiss)" > summary_counts.txt
+      "${'$'}(awk 'END {print NR-1}' ${params.cohort}.smiss)" \
+      "${'$'}(awk 'END {print NR-1}' ${params.cohort}.vmiss)" > summary_counts.txt
     """
 }
 
@@ -328,13 +328,14 @@ workflow {
         )
     }
 
-    if (params.fsx_direct && params.skip_rsid_annotation) {
-        fsxInputs = inputStrings.map { chr, vcf, map -> tuple(chr, vcf) }
-        PREPROCESS_CHROMOSOME_FSX_NO_RSID(fsxInputs)
-        chromosomePfiles = PREPROCESS_CHROMOSOME_FSX_NO_RSID.out.pfiles
-    } else if (params.fsx_direct) {
-        PREPROCESS_CHROMOSOME_FSX(inputStrings)
-        chromosomePfiles = PREPROCESS_CHROMOSOME_FSX.out.pfiles
+    def useDirectInputs = params.direct_inputs || params.fsx_direct
+    if (useDirectInputs && params.skip_rsid_annotation) {
+        directInputs = inputStrings.map { chr, vcf, map -> tuple(chr, vcf) }
+        PREPROCESS_CHROMOSOME_DIRECT_NO_RSID(directInputs)
+        chromosomePfiles = PREPROCESS_CHROMOSOME_DIRECT_NO_RSID.out.pfiles
+    } else if (useDirectInputs) {
+        PREPROCESS_CHROMOSOME_DIRECT(inputStrings)
+        chromosomePfiles = PREPROCESS_CHROMOSOME_DIRECT.out.pfiles
     } else {
         stagedInputs = inputStrings.map { chr, vcf, map ->
             tuple(chr, file(vcf, checkIfExists: true), file(map, checkIfExists: true))

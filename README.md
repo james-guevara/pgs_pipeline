@@ -14,7 +14,8 @@ Docker or AWS Batch.
 6. Optionally run LD pruning, KING, PCA on unrelated samples, and projection of all samples.
 
 The original Python and Slurm entrypoints remain for reference. `main.nf` is the
-portable orchestration entrypoint.
+portable orchestration entrypoint; cloud queues and filesystem mounts are
+deployment profiles, not part of the scientific workflow.
 
 ## Required inputs
 
@@ -93,6 +94,22 @@ The Batch compute environment launch template must mount FSx at `--fsx_mount`.
 For an infrastructure-only smoke test, `--skip_rsid_annotation true` permits
 conversion and QC without an rsID map. Do not use that option for PGS scoring,
 which requires variants to be aligned to the weight files by rsID.
+
+On Slurm with a shared filesystem and Apptainer:
+
+```bash
+nextflow run main.nf -profile slurm \
+  --container /shared/containers/pgs-pipeline.sif \
+  --shared_work_dir /shared/nextflow-work \
+  --direct_inputs true \
+  --vcfs '/shared/vcfs/chr{chr}.dose.vcf.gz' \
+  --rsid_maps '/shared/rsid_maps/chr{chr}.map'
+```
+
+`--direct_inputs` is executor-neutral: use it whenever controller and workers
+share the same absolute POSIX paths. Without it, Nextflow stages declared input
+files normally. Other schedulers can be added in a site-specific config passed
+with `-c`, without changing `main.nf`.
 
 The Batch compute environment must be able to pull the ECR image. Its job role
 must be able to read inputs and read/write the work and output S3 prefixes. Do
