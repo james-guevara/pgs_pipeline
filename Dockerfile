@@ -7,5 +7,7 @@ USER root
 COPY --from=awscli /usr/local/aws-cli/ /usr/local/aws-cli/
 RUN ln -s /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws
 
+ENV LD_LIBRARY_PATH="/usr/local/aws-cli/v2/current/dist"
+
 ENTRYPOINT []
 CMD ["plink2", "--version"]
