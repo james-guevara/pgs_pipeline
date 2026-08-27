@@ -18,6 +18,8 @@ are:
 - `reference_scores`: 1000 Genomes coordinates in the same projected space.
 - `ancestry_labels`: labeled 1000 Genomes training samples.
 - `classifier`: versioned ancestry model and decision thresholds.
+- `classifier_metadata`: model type, PC columns, class order, threshold, and
+  pinned runtime version.
 - `checksums`: SHA-256 manifest covering every reference artifact.
 
 Paths may be staged object-store URIs or shared POSIX paths. The reference files
@@ -64,3 +66,13 @@ The workflow must publish:
 
 Raw PGS values are separate outputs. Scaling and residualization using
 within-ancestry PCs belong to downstream analysis rather than the scoring step.
+
+## Current candidate reference
+
+The Expanse release at
+`/expanse/projects/sebat1/s3/data/sebat/pgs_wf_1kg/releases/1kg_grch38_v1`
+contains 111,276 panel variants, loadings trained on 2,575 unrelated samples,
+and projected coordinates and labels for all 3,202 reference samples. Its Extra
+Trees classifier achieved 99.66% leave-one-population-out accuracy. At the 0.8
+probability threshold, it assigned 94.72% of validation samples with 99.84%
+accuracy. See `examples/pca_reference_expanse.tsv`.
