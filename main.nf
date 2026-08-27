@@ -97,27 +97,6 @@ process PREPROCESS_CHROMOSOME_FSX {
     def infoFilter = params.r2 != null ? "--extract-if-info R2 >= ${params.r2}" :
                      params.aq != null ? "--extract-if-info AQ >= ${params.aq}" : ''
     def memMb = Math.max(1000, (task.memory.toMega() as int) - 1000)
-    def annotationStep = params.skip_rsid_annotation ? """
-    plink2 \\
-      --pfile filtered \\
-      --maf ${params.maf} \\
-      --make-pgen \\
-      --out chr${chr} \\
-      --threads ${task.cpus} \\
-      --memory ${memMb}
-    """ : """
-    test -r '${rsid_map}'
-    awk '{print \$2}' '${rsid_map}' > mapped_ids.txt
-    plink2 \\
-      --pfile filtered \\
-      --update-name '${rsid_map}' 2 1 \\
-      --extract mapped_ids.txt \\
-      --maf ${params.maf} \\
-      --make-pgen \\
-      --out chr${chr} \\
-      --threads ${task.cpus} \\
-      --memory ${memMb}
-    """
     """
     test -r '${vcf}'
     plink2 \
@@ -135,7 +114,27 @@ process PREPROCESS_CHROMOSOME_FSX {
       --threads ${task.cpus} \
       --memory ${memMb}
 
-    ${annotationStep}
+    if ${params.skip_rsid_annotation}; then
+      plink2 \
+        --pfile filtered \
+        --maf ${params.maf} \
+        --make-pgen \
+        --out chr${chr} \
+        --threads ${task.cpus} \
+        --memory ${memMb}
+    else
+      test -r '${rsid_map}'
+      awk '{print \$2}' '${rsid_map}' > mapped_ids.txt
+      plink2 \
+        --pfile filtered \
+        --update-name '${rsid_map}' 2 1 \
+        --extract mapped_ids.txt \
+        --maf ${params.maf} \
+        --make-pgen \
+        --out chr${chr} \
+        --threads ${task.cpus} \
+        --memory ${memMb}
+    fi
     """
 }
 
