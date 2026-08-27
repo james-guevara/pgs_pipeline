@@ -21,6 +21,7 @@ params.num_pcs = 10
 params.ld_window = 200
 params.ld_step = 50
 params.ld_r2 = 0.1
+params.fsx_direct = false
 
 def chromosomeList(value) {
     def text = value.toString()
@@ -66,6 +67,57 @@ process PREPROCESS_CHROMOSOME {
     plink2 \
       --pfile filtered \
       --update-name ${rsid_map} 2 1 \
+      --extract mapped_ids.txt \
+      --maf ${params.maf} \
+      --make-pgen \
+      --out chr${chr} \
+      --threads ${task.cpus} \
+      --memory ${memMb}
+    """
+}
+
+/*
+ * FSx inputs are passed as values so Nextflow does not copy chromosome-scale
+ * files through its S3 work directory. The AWS Batch compute environment must
+ * mount the same absolute path inside every task container.
+ */
+process PREPROCESS_CHROMOSOME_FSX {
+    tag "chr${chr}"
+    label 'small'
+    publishDir "${params.outdir}/01_chromosomes", mode: 'copy', pattern: 'chr*.*'
+
+    input:
+    tuple val(chr), val(vcf), val(rsid_map)
+
+    output:
+    tuple val(chr), path("chr${chr}.pgen"), path("chr${chr}.pvar"), path("chr${chr}.psam"), emit: pfiles
+
+    script:
+    def infoFilter = params.r2 != null ? "--extract-if-info R2 >= ${params.r2}" :
+                     params.aq != null ? "--extract-if-info AQ >= ${params.aq}" : ''
+    def memMb = Math.max(1000, (task.memory.toMega() as int) - 1000)
+    """
+    test -r '${vcf}'
+    test -r '${rsid_map}'
+    plink2 \
+      --vcf '${vcf}' \
+      --vcf-half-call missing \
+      --snps-only just-acgt \
+      --max-alleles 2 \
+      --var-filter \
+      --mac ${params.mac} \
+      --geno ${params.geno} \
+      --set-all-var-ids '@:#:\$r:\$a' \
+      ${infoFilter} \
+      --make-pgen \
+      --out filtered \
+      --threads ${task.cpus} \
+      --memory ${memMb}
+
+    awk '{print \$2}' '${rsid_map}' > mapped_ids.txt
+    plink2 \
+      --pfile filtered \
+      --update-name '${rsid_map}' 2 1 \
       --extract mapped_ids.txt \
       --maf ${params.maf} \
       --make-pgen \
@@ -224,14 +276,26 @@ workflow {
     }
 
     def chromosomes = chromosomeList(params.chromosomes)
-    inputs = Channel.fromList(chromosomes).map { chr ->
-        def vcf = params.vcfs.toString().replace('{chr}', chr.toString())
-        def map = params.rsid_maps.toString().replace('{chr}', chr.toString())
-        tuple(chr, file(vcf, checkIfExists: true), file(map, checkIfExists: true))
+    inputStrings = Channel.fromList(chromosomes).map { chr ->
+        tuple(
+            chr,
+            params.vcfs.toString().replace('{chr}', chr.toString()),
+            params.rsid_maps.toString().replace('{chr}', chr.toString())
+        )
     }
 
-    PREPROCESS_CHROMOSOME(inputs)
-    allChromosomeFiles = PREPROCESS_CHROMOSOME.out.pfiles
+    if (params.fsx_direct) {
+        PREPROCESS_CHROMOSOME_FSX(inputStrings)
+        chromosomePfiles = PREPROCESS_CHROMOSOME_FSX.out.pfiles
+    } else {
+        stagedInputs = inputStrings.map { chr, vcf, map ->
+            tuple(chr, file(vcf, checkIfExists: true), file(map, checkIfExists: true))
+        }
+        PREPROCESS_CHROMOSOME(stagedInputs)
+        chromosomePfiles = PREPROCESS_CHROMOSOME.out.pfiles
+    }
+
+    allChromosomeFiles = chromosomePfiles
         .map { chr, pgen, pvar, psam -> [pgen, pvar, psam] }
         .flatten()
         .collect()

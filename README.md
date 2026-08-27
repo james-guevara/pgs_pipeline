@@ -74,6 +74,23 @@ nextflow run main.nf -profile awsbatch \
   --rsid_maps 's3://my-pgs-bucket/rsid_maps/chr{chr}.map'
 ```
 
+For data already resident on an FSx for Lustre mount, use the FSx profile and
+pass absolute FSx paths. This avoids copying the VCF through the S3 work area:
+
+```bash
+nextflow run main.nf -profile awsbatch_fsx \
+  --fsx_direct true \
+  --fsx_mount /fsx \
+  --vcfs '/fsx/path/to/chr{chr}.vcf.gz' \
+  --rsid_maps '/fsx/path/to/chr{chr}.map' \
+  --aws_queue 'my-fsx-batch-queue' \
+  --aws_region us-east-1 \
+  --aws_work_dir 's3://my-bucket/nextflow-work' \
+  --outdir 's3://my-bucket/results/run-001'
+```
+
+The Batch compute environment launch template must mount FSx at `--fsx_mount`.
+
 The Batch compute environment must be able to pull the ECR image. Its job role
 must be able to read inputs and read/write the work and output S3 prefixes. Do
 not put access keys in this repository; use IAM roles or the AWS credential
