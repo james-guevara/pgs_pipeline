@@ -506,7 +506,7 @@ workflow {
                     file(row.checksums.toString(), checkIfExists: true)
                 )
             }
-            .collect()
+            .collect(flat: false)
             .map { rows ->
                 if (rows.size() != 1) {
                     error 'PCA reference sheet must contain exactly one data row'
