@@ -112,6 +112,22 @@ nextflow run main.nf -profile slurm \
   --rsid_maps '/shared/rsid_maps/chr{chr}.map'
 ```
 
+To run scoring and/or PCA from an existing QCed PLINK 2 dataset, provide its
+prefix (the path before `.pgen`, `.pvar`, and `.psam`). This bypasses VCF
+conversion, chromosome concatenation, and missingness filtering:
+
+```bash
+nextflow run main.nf -profile slurm \
+  --input_pfile /shared/cohorts/cohort \
+  --run_pca true \
+  --pca_reference_sheet examples/pca_reference.tsv \
+  --shared_work_dir /shared/nextflow-work \
+  --outdir /shared/results/run-001
+```
+
+The input is treated as already QCed; use the VCF path when the pipeline should
+apply its own preprocessing and missingness thresholds.
+
 `--direct_inputs` is executor-neutral: use it whenever controller and workers
 share the same absolute POSIX paths. Without it, Nextflow stages declared input
 files normally. Other schedulers can be added in a site-specific config passed
@@ -128,6 +144,7 @@ work directory, and AWS CLI in the task image ([Nextflow documentation](https://
 | Parameter | Default | Meaning |
 |---|---:|---|
 | `chromosomes` | `1..22` | Inclusive range or comma-separated list |
+| `input_pfile` | unset | Existing QCed PLINK 2 prefix; bypasses VCF preprocessing |
 | `cohort` | `cohort` | Output prefix |
 | `genome_build` | `GRCh38` | Cohort genome build; must match the PCA reference |
 | `mac` | `10` | Minimum allele count |

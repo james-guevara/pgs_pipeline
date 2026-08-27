@@ -2,6 +2,7 @@ nextflow.enable.dsl=2
 
 params.vcfs = null
 params.rsid_maps = null
+params.input_pfile = null
 params.chromosomes = '1..22'
 params.cohort = 'cohort'
 params.genome_build = 'GRCh38'
@@ -434,42 +435,51 @@ workflow {
         error '--pca_reference_sheet is required when --run_pca is true'
     }
 
-    if (!params.vcfs || (!params.rsid_maps && !skipRsid)) {
-        error '--vcfs is required, and --rsid_maps is required unless --skip_rsid_annotation is true.'
+    if (!params.input_pfile && (!params.vcfs || (!params.rsid_maps && !skipRsid))) {
+        error '--vcfs is required, and --rsid_maps is required unless --skip_rsid_annotation is true; alternatively provide --input_pfile with a QCed PLINK 2 prefix.'
     }
 
-    def chromosomes = chromosomeList(params.chromosomes)
-    inputStrings = Channel.fromList(chromosomes).map { chr ->
-        tuple(
-            chr,
-            params.vcfs.toString().replace('{chr}', chr.toString()),
-            params.rsid_maps ? params.rsid_maps.toString().replace('{chr}', chr.toString()) : ''
-        )
-    }
-
-    if (directInputsEnabled && skipRsid) {
-        directInputs = inputStrings.map { chr, vcf, map -> tuple(chr, vcf) }
-        PREPROCESS_CHROMOSOME_DIRECT_NO_RSID(directInputs)
-        chromosomePfiles = PREPROCESS_CHROMOSOME_DIRECT_NO_RSID.out.pfiles
-    } else if (directInputsEnabled) {
-        PREPROCESS_CHROMOSOME_DIRECT(inputStrings)
-        chromosomePfiles = PREPROCESS_CHROMOSOME_DIRECT.out.pfiles
+    if (params.input_pfile) {
+        def pfilePrefix = params.input_pfile.toString()
+        qcPfile = Channel.value(tuple(
+            file("${pfilePrefix}.pgen", checkIfExists: true),
+            file("${pfilePrefix}.pvar", checkIfExists: true),
+            file("${pfilePrefix}.psam", checkIfExists: true)
+        ))
     } else {
-        stagedInputs = inputStrings.map { chr, vcf, map ->
-            tuple(chr, file(vcf, checkIfExists: true), file(map, checkIfExists: true))
+        def chromosomes = chromosomeList(params.chromosomes)
+        inputStrings = Channel.fromList(chromosomes).map { chr ->
+            tuple(
+                chr,
+                params.vcfs.toString().replace('{chr}', chr.toString()),
+                params.rsid_maps ? params.rsid_maps.toString().replace('{chr}', chr.toString()) : ''
+            )
         }
-        PREPROCESS_CHROMOSOME(stagedInputs)
-        chromosomePfiles = PREPROCESS_CHROMOSOME.out.pfiles
+
+        if (directInputsEnabled && skipRsid) {
+            directInputs = inputStrings.map { chr, vcf, map -> tuple(chr, vcf) }
+            PREPROCESS_CHROMOSOME_DIRECT_NO_RSID(directInputs)
+            chromosomePfiles = PREPROCESS_CHROMOSOME_DIRECT_NO_RSID.out.pfiles
+        } else if (directInputsEnabled) {
+            PREPROCESS_CHROMOSOME_DIRECT(inputStrings)
+            chromosomePfiles = PREPROCESS_CHROMOSOME_DIRECT.out.pfiles
+        } else {
+            stagedInputs = inputStrings.map { chr, vcf, map ->
+                tuple(chr, file(vcf, checkIfExists: true), file(map, checkIfExists: true))
+            }
+            PREPROCESS_CHROMOSOME(stagedInputs)
+            chromosomePfiles = PREPROCESS_CHROMOSOME.out.pfiles
+        }
+
+        allChromosomeFiles = chromosomePfiles
+            .map { chr, pgen, pvar, psam -> [pgen, pvar, psam] }
+            .flatten()
+            .collect()
+        CONCAT_CHROMOSOMES(allChromosomeFiles)
+        MISSINGNESS_QC(CONCAT_CHROMOSOMES.out.pfile)
+        qcPfile = MISSINGNESS_QC.out.pfile
     }
 
-    allChromosomeFiles = chromosomePfiles
-        .map { chr, pgen, pvar, psam -> [pgen, pvar, psam] }
-        .flatten()
-        .collect()
-    CONCAT_CHROMOSOMES(allChromosomeFiles)
-    MISSINGNESS_QC(CONCAT_CHROMOSOMES.out.pfile)
-
-    qcPfile = MISSINGNESS_QC.out.pfile
     SUMMARY_QC(qcPfile)
 
     if (pcaEnabled) {
