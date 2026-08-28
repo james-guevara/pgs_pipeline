@@ -183,6 +183,10 @@ Python-only processes use the pinned non-slim Python image because it includes
 the `ps` utility required for Nextflow task metrics on Slurm and other executors.
 Each scoring run publishes per-trait QC, `combined_scores.tsv`, and
 `score_qc_summary.tsv` alongside the PLINK score files.
+When both scoring and PCA are enabled, the workflow also publishes
+`07_analysis/analysis_dataset.tsv`: one participant-level table containing PGS
+values, ancestry probabilities, global PCs, within-ancestry PCs, and PCA
+reliability metadata. `analysis_dataset_dictionary.tsv` documents its schema.
 `config.toml.example` is only for the legacy Python entrypoints.
 
 ## Weight-generation boundary
