@@ -136,6 +136,14 @@ for ancestry in AFR AMR EAS EUR SAS; do
       --memory "$memory_mb"
 
     cp "$group_dir/projected.sscore" "$group_dir/pcs.tsv"
+    # Keep the exact PCA variant IDs, training sample IDs, eigenvalues, and
+    # projected PCs. These larger files are regenerable task intermediates and
+    # are not needed for downstream residualization or provenance.
+    rm -f \
+      "$group_dir/prune.prune.out" \
+      "$group_dir/training.acount" \
+      "$group_dir/training.eigenvec.allele" \
+      "$group_dir/projected.sscore"
     printf '%s\t%d\t%d\t%d\t%d\tcompleted\t%s\t.\n' \
       "$ancestry" "$assigned" "$unrelated" "$pca_variants" "$group_pcs" "$reliability" >> "$status_file"
 done

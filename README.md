@@ -179,6 +179,8 @@ work directory, and AWS CLI in the task image ([Nextflow documentation](https://
 Resource defaults live in `nextflow.config` and can be overridden with `-c`.
 Scoring uses a dedicated portable default of 4 CPUs and 8 GB RAM; site adapters
 can override the `scoring` process label without changing the workflow.
+Python-only processes use the pinned non-slim Python image because it includes
+the `ps` utility required for Nextflow task metrics on Slurm and other executors.
 Each scoring run publishes per-trait QC, `combined_scores.tsv`, and
 `score_qc_summary.tsv` alongside the PLINK score files.
 `config.toml.example` is only for the legacy Python entrypoints.

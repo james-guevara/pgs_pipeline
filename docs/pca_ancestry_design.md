@@ -64,7 +64,9 @@ The workflow must publish:
   probabilities.
 - `within_ancestry/<group>/pcs.tsv` and `reliability.tsv`, or `skipped.tsv` when
   PCA is not computable, plus `within_ancestry/status.tsv` summarizing every
-  group.
+  group. Exact PCA variant IDs, unrelated training sample IDs, eigenvalues, and
+  logs are retained; regenerable excluded-variant lists, allele-loading tables,
+  and duplicate projection files are removed before publication.
 - Reference ID, file checksums, software/container versions, and effective
   parameters in the run provenance.
 
