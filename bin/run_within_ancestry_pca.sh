@@ -45,11 +45,13 @@ for ancestry in AFR AMR EAS EUR SAS; do
     fi
 
     ld_sample_override=()
+    frequency_sample_override=()
     if (( assigned < 50 )); then
         # PLINK refuses LD estimation below 50 samples by default. The user has
         # explicitly requested best-effort PCs for these groups; their outputs
         # remain marked unreliable_small_sample.
         ld_sample_override=(--bad-ld)
+        frequency_sample_override=(--bad-freqs)
     fi
 
     plink2 \
@@ -116,6 +118,7 @@ for ancestry in AFR AMR EAS EUR SAS; do
       --pfile "$pfile" \
       --keep "$group_dir/king.king.cutoff.in.id" \
       --extract "$group_dir/training_polymorphic.ids" \
+      "${frequency_sample_override[@]}" \
       --pca allele-wts "$group_pcs" \
       --out "$group_dir/training" \
       --threads "$cpus" \
