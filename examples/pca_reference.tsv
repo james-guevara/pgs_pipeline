@@ -1,0 +1,2 @@
+reference_id	genome_build	panel_variants	allele_frequencies	loadings	reference_scores	ancestry_labels	classifier	classifier_metadata	checksums
+1kg_grch38_v1	GRCh38	s3://my-pgs-bucket/pca/1kg_grch38_v1.variants.tsv	s3://my-pgs-bucket/pca/1kg_grch38_v1.acount	s3://my-pgs-bucket/pca/1kg_grch38_v1.eigenvec.allele	s3://my-pgs-bucket/pca/1kg_grch38_v1.reference_scores.tsv	s3://my-pgs-bucket/pca/1kg_grch38_v1.ancestry_labels.tsv	s3://my-pgs-bucket/pca/1kg_grch38_v1.classifier_model.json	s3://my-pgs-bucket/pca/1kg_grch38_v1.classifier.json	s3://my-pgs-bucket/pca/1kg_grch38_v1.sha256

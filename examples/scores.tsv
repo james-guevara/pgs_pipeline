@@ -1,0 +1,3 @@
+trait	weights	id_col	allele_col	effect_col
+height	s3://my-pgs-bucket/weights/height.snpRes	2	5	8
+bmi	s3://my-pgs-bucket/weights/bmi.snpRes	2	5	8
