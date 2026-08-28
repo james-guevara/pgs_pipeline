@@ -80,7 +80,7 @@ for ancestry in AFR AMR EAS EUR SAS; do
       --threads "$cpus" \
       --memory "$memory_mb"
 
-    unrelated=$(wc -l < "$group_dir/king.king.cutoff.in.id")
+    unrelated=$(awk 'NR > 1 { n++ } END { print n + 0 }' "$group_dir/king.king.cutoff.in.id")
     if (( unrelated < 3 )); then
         printf 'ancestry\tassigned_samples\tunrelated_training_samples\treason\n%s\t%d\t%d\tinsufficient_unrelated_training_samples\n' \
           "$ancestry" "$assigned" "$unrelated" > "$group_dir/skipped.tsv"
