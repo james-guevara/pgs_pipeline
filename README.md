@@ -169,7 +169,7 @@ work directory, and AWS CLI in the task image ([Nextflow documentation](https://
 | `num_pcs` | `10` | Number of global reference PCs to project |
 | `num_within_ancestry_pcs` | `10` | Maximum PCs calculated within each ancestry group |
 | `min_pca_variant_overlap` | `0.90` | Minimum usable fraction of the fixed PCA panel |
-| `min_ancestry_samples` | `50` | Minimum group size for within-ancestry PCA |
+| `min_ancestry_samples` | `50` | Reliability threshold for within-ancestry PCA; smaller computable groups are flagged unreliable |
 | `within_ancestry_king_cutoff` | `0.0884` | KING relatedness cutoff for the unrelated PCA training subset |
 | `within_ancestry_ld_window` | `200` | LD-pruning window size in variants |
 | `within_ancestry_ld_step` | `50` | LD-pruning step size in variants |

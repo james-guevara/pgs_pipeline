@@ -20,7 +20,7 @@ output_dir=${11}
 
 mkdir -p "$output_dir"
 status_file="$output_dir/status.tsv"
-printf 'ancestry\tassigned_samples\tunrelated_training_samples\tpruned_variants\tpcs\tstatus\treason\n' > "$status_file"
+printf 'ancestry\tassigned_samples\tunrelated_training_samples\tpruned_variants\tpcs\tstatus\treliability\treason\n' > "$status_file"
 
 for ancestry in AFR AMR EAS EUR SAS; do
     group_dir="$output_dir/$ancestry"
@@ -30,10 +30,17 @@ for ancestry in AFR AMR EAS EUR SAS; do
     awk -F '\t' -v ancestry="$ancestry" 'NR > 1 && $2 == ancestry {gsub(/\r/, "", $1); print $1}' "$ancestry_tsv" >> "$keep_file"
     assigned=$(( $(wc -l < "$keep_file") - 1 ))
 
+    reliability=reliable
     if (( assigned < min_samples )); then
-        printf 'ancestry\tassigned_samples\tminimum_samples\treason\n%s\t%d\t%d\tbelow_minimum_sample_size\n' \
-          "$ancestry" "$assigned" "$min_samples" > "$group_dir/skipped.tsv"
-        printf '%s\t%d\t0\t0\t0\tskipped\tbelow_minimum_sample_size\n' "$ancestry" "$assigned" >> "$status_file"
+        reliability=unreliable_small_sample
+    fi
+    printf 'ancestry\tassigned_samples\treliability_threshold\treliability\n%s\t%d\t%d\t%s\n' \
+      "$ancestry" "$assigned" "$min_samples" "$reliability" > "$group_dir/reliability.tsv"
+
+    if (( assigned < 3 )); then
+        printf 'ancestry\tassigned_samples\tminimum_computable_samples\treason\n%s\t%d\t3\tinsufficient_samples_for_pca\n' \
+          "$ancestry" "$assigned" > "$group_dir/skipped.tsv"
+        printf '%s\t%d\t0\t0\t0\tskipped\tnot_computable\tinsufficient_samples_for_pca\n' "$ancestry" "$assigned" >> "$status_file"
         continue
     fi
 
@@ -49,7 +56,7 @@ for ancestry in AFR AMR EAS EUR SAS; do
     if (( pruned_variants == 0 )); then
         printf 'ancestry\tassigned_samples\tminimum_samples\treason\n%s\t%d\t%d\tno_variants_after_ld_pruning\n' \
           "$ancestry" "$assigned" "$min_samples" > "$group_dir/skipped.tsv"
-        printf '%s\t%d\t0\t0\t0\tskipped\tno_variants_after_ld_pruning\n' "$ancestry" "$assigned" >> "$status_file"
+        printf '%s\t%d\t0\t0\t0\tskipped\tnot_computable\tno_variants_after_ld_pruning\n' "$ancestry" "$assigned" >> "$status_file"
         continue
     fi
 
@@ -66,7 +73,7 @@ for ancestry in AFR AMR EAS EUR SAS; do
     if (( unrelated < 3 )); then
         printf 'ancestry\tassigned_samples\tunrelated_training_samples\treason\n%s\t%d\t%d\tinsufficient_unrelated_training_samples\n' \
           "$ancestry" "$assigned" "$unrelated" > "$group_dir/skipped.tsv"
-        printf '%s\t%d\t%d\t%d\t0\tskipped\tinsufficient_unrelated_training_samples\n' \
+        printf '%s\t%d\t%d\t%d\t0\tskipped\tnot_computable\tinsufficient_unrelated_training_samples\n' \
           "$ancestry" "$assigned" "$unrelated" "$pruned_variants" >> "$status_file"
         continue
     fi
@@ -91,7 +98,7 @@ for ancestry in AFR AMR EAS EUR SAS; do
     if (( pca_variants == 0 )); then
         printf 'ancestry\tassigned_samples\tunrelated_training_samples\treason\n%s\t%d\t%d\tno_polymorphic_training_variants\n' \
           "$ancestry" "$assigned" "$unrelated" > "$group_dir/skipped.tsv"
-        printf '%s\t%d\t%d\t0\t0\tskipped\tno_polymorphic_training_variants\n' \
+        printf '%s\t%d\t%d\t0\t0\tskipped\tnot_computable\tno_polymorphic_training_variants\n' \
           "$ancestry" "$assigned" "$unrelated" >> "$status_file"
         continue
     fi
@@ -117,6 +124,6 @@ for ancestry in AFR AMR EAS EUR SAS; do
       --memory "$memory_mb"
 
     cp "$group_dir/projected.sscore" "$group_dir/pcs.tsv"
-    printf '%s\t%d\t%d\t%d\t%d\tcompleted\t.\n' \
-      "$ancestry" "$assigned" "$unrelated" "$pca_variants" "$group_pcs" >> "$status_file"
+    printf '%s\t%d\t%d\t%d\t%d\tcompleted\t%s\t.\n' \
+      "$ancestry" "$assigned" "$unrelated" "$pca_variants" "$group_pcs" "$reliability" >> "$status_file"
 done

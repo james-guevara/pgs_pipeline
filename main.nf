@@ -618,6 +618,39 @@ process WITHIN_ANCESTRY_PCA {
     """
 }
 
+process WITHIN_ANCESTRY_PCA_DIRECT {
+    tag params.cohort
+    label 'large'
+    publishDir "${params.outdir}/06_pca", mode: 'copy'
+
+    input:
+    tuple val(pgen), val(pvar), val(psam)
+    path ancestry_assignments
+    path within_ancestry_script
+
+    output:
+    path 'within_ancestry', emit: groups
+
+    script:
+    def inputPrefix = pgen.toString().replaceFirst(/[.]pgen$/, '')
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
+    """
+    test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
+    bash ${within_ancestry_script} \
+      '${inputPrefix}' \
+      ${ancestry_assignments} \
+      ${params.min_ancestry_samples} \
+      ${params.num_within_ancestry_pcs} \
+      ${params.within_ancestry_king_cutoff} \
+      ${params.within_ancestry_ld_window} \
+      ${params.within_ancestry_ld_step} \
+      ${params.within_ancestry_ld_r2} \
+      ${task.cpus} \
+      ${memMb} \
+      within_ancestry
+    """
+}
+
 workflow {
     def skipRsid = flagEnabled(params.skip_rsid_annotation)
     def directInputsEnabled = flagEnabled(params.direct_inputs) || flagEnabled(params.fsx_direct)
@@ -750,11 +783,19 @@ workflow {
             pcaClassifierMetadataCh,
             Channel.value(file("${projectDir}/bin/apply_extra_trees.py"))
         )
-        WITHIN_ANCESTRY_PCA(
-            pcaInput,
-            CLASSIFY_ANCESTRY.out.assignments,
-            Channel.value(file("${projectDir}/bin/run_within_ancestry_pca.sh"))
-        )
+        if (directPfileEnabled) {
+            WITHIN_ANCESTRY_PCA_DIRECT(
+                qcPfile,
+                CLASSIFY_ANCESTRY.out.assignments,
+                Channel.value(file("${projectDir}/bin/run_within_ancestry_pca.sh"))
+            )
+        } else {
+            WITHIN_ANCESTRY_PCA(
+                qcPfile,
+                CLASSIFY_ANCESTRY.out.assignments,
+                Channel.value(file("${projectDir}/bin/run_within_ancestry_pca.sh"))
+            )
+        }
     }
 
     if (scoresEnabled) {

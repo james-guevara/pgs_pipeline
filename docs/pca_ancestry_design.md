@@ -38,10 +38,13 @@ are inputs; the workflow must never modify them.
    cohort frequencies, and emit the exact used-variant list.
 5. **Assign ancestry**: apply the versioned classifier to projected cohort PCs;
    retain per-class probabilities as well as the final label.
-6. **Within-ancestry PCA**: for each assigned group with at least
-   `min_ancestry_samples`, perform LD pruning, relatedness handling, PCA on an
-   unrelated training subset, and projection of all samples in that group.
-   Groups below the threshold receive a machine-readable skipped result.
+6. **Within-ancestry PCA**: use the broader QC'd cohort variant set, rather than
+   the fixed 1kG projection panel. For each assigned group, perform LD pruning,
+   relatedness handling, PCA on an unrelated training subset, and projection of
+   all samples in that group. Groups below `min_ancestry_samples` are calculated
+   when mathematically possible and flagged `unreliable_small_sample`; only
+   groups with insufficient samples, unrelated training samples, or variants
+   receive a machine-readable skipped result.
 
 If panel overlap is materially below the level on which the fixed classifier was
 validated, the pipeline must stop. A separate reference-building workflow should
@@ -59,8 +62,9 @@ The workflow must publish:
 - `global_pcs.tsv`: sample IDs and projected PCs.
 - `ancestry_probabilities.tsv`: sample IDs, final labels, and all class
   probabilities.
-- `within_ancestry/<group>/pcs.tsv`, or `skipped.tsv` with sample count and
-  threshold, plus `within_ancestry/status.tsv` summarizing every group.
+- `within_ancestry/<group>/pcs.tsv` and `reliability.tsv`, or `skipped.tsv` when
+  PCA is not computable, plus `within_ancestry/status.tsv` summarizing every
+  group.
 - Reference ID, file checksums, software/container versions, and effective
   parameters in the run provenance.
 
