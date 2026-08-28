@@ -367,14 +367,44 @@ process COLLATE_SCORE_RESULTS {
     path collate_script
 
     output:
-    path 'combined_scores.tsv'
-    path 'score_qc_summary.tsv'
+    path 'combined_scores.tsv', emit: combined
+    path 'score_qc_summary.tsv', emit: qc
 
     script:
     """
     bash ${collate_script} \
       combined_scores.tsv score_qc_summary.tsv \
       ${sscores.join(' ')} -- ${score_qcs.join(' ')}
+    """
+}
+
+process BUILD_ANALYSIS_DATASET {
+    label 'small'
+    container params.python_container
+    publishDir "${params.outdir}/07_analysis", mode: 'copy'
+
+    input:
+    path combined_scores
+    path global_pcs
+    path ancestry_assignments
+    path within_ancestry
+    path builder_script
+
+    output:
+    path 'analysis_dataset.tsv', emit: dataset
+    path 'analysis_dataset_dictionary.tsv', emit: dictionary
+
+    script:
+    """
+    python ${builder_script} \
+      --scores ${combined_scores} \
+      --global-pcs ${global_pcs} \
+      --ancestry ${ancestry_assignments} \
+      --within-dir ${within_ancestry} \
+      --num-global-pcs ${params.num_pcs} \
+      --num-within-pcs ${params.num_within_ancestry_pcs} \
+      --output analysis_dataset.tsv \
+      --dictionary analysis_dataset_dictionary.tsv
     """
 }
 
@@ -658,6 +688,10 @@ workflow {
     def pcaEnabled = flagEnabled(params.run_pca)
     def scoresEnabled = flagEnabled(params.run_scores)
     def summaryQcEnabled = flagEnabled(params.run_summary_qc)
+    def globalPcResults = null
+    def ancestryResults = null
+    def withinAncestryResults = null
+    def combinedScoreResults = null
 
     if (pcaEnabled && !params.pca_reference_sheet) {
         error '--pca_reference_sheet is required when --run_pca is true'
@@ -777,24 +811,28 @@ workflow {
             pcaInput = PREPARE_PCA_PFILE.out.pfile
         }
         PROJECT_GLOBAL_PCS(pcaInput, pcaFrequenciesCh, pcaLoadingsCh)
+        globalPcResults = PROJECT_GLOBAL_PCS.out.scores
         CLASSIFY_ANCESTRY(
             PROJECT_GLOBAL_PCS.out.scores,
             pcaClassifierCh,
             pcaClassifierMetadataCh,
             Channel.value(file("${projectDir}/bin/apply_extra_trees.py"))
         )
+        ancestryResults = CLASSIFY_ANCESTRY.out.assignments
         if (directPfileEnabled) {
             WITHIN_ANCESTRY_PCA_DIRECT(
                 qcPfile,
                 CLASSIFY_ANCESTRY.out.assignments,
                 Channel.value(file("${projectDir}/bin/run_within_ancestry_pca.sh"))
             )
+            withinAncestryResults = WITHIN_ANCESTRY_PCA_DIRECT.out.groups
         } else {
             WITHIN_ANCESTRY_PCA(
                 qcPfile,
                 CLASSIFY_ANCESTRY.out.assignments,
                 Channel.value(file("${projectDir}/bin/run_within_ancestry_pca.sh"))
             )
+            withinAncestryResults = WITHIN_ANCESTRY_PCA.out.groups
         }
     }
 
@@ -832,6 +870,17 @@ workflow {
             scoreFiles,
             scoreQcFiles,
             Channel.value(file("${projectDir}/bin/collate_scores.sh"))
+        )
+        combinedScoreResults = COLLATE_SCORE_RESULTS.out.combined
+    }
+
+    if (pcaEnabled && scoresEnabled) {
+        BUILD_ANALYSIS_DATASET(
+            combinedScoreResults,
+            globalPcResults,
+            ancestryResults,
+            withinAncestryResults,
+            Channel.value(file("${projectDir}/bin/build_analysis_dataset.py"))
         )
     }
 }
