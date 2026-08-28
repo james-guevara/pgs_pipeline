@@ -254,6 +254,31 @@ process SUMMARY_QC {
     """
 }
 
+process SUMMARY_QC_DIRECT {
+    tag params.cohort
+    label 'large'
+    publishDir "${params.outdir}/04_summary", mode: 'copy'
+
+    input:
+    tuple val(pgen), val(pvar), val(psam)
+
+    output:
+    path "${params.cohort}.*"
+    path 'summary_counts.txt'
+
+    script:
+    def inputPrefix = pgen.toString().replaceFirst(/[.]pgen$/, '')
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
+    """
+    test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
+    plink2 --pfile '${inputPrefix}' --missing --hardy --freq \
+      --out ${params.cohort} --threads ${task.cpus} --memory ${memMb}
+    printf 'Metric\\tCount\\nSamples\\t%s\\nVariants\\t%s\\n' \
+      "${'$'}(awk 'END {print NR-1}' ${params.cohort}.smiss)" \
+      "${'$'}(awk 'END {print NR-1}' ${params.cohort}.vmiss)" > summary_counts.txt
+    """
+}
+
 process SCORE_TRAIT {
     tag trait
     label 'large'
@@ -272,6 +297,33 @@ process SCORE_TRAIT {
     """
     plink2 \
       --pfile ${inputPrefix} \
+      --score ${weights} ${id_col} ${allele_col} ${effect_col} header center list-variants no-mean-imputation \
+      --out ${trait} \
+      --threads ${task.cpus} \
+      --memory ${memMb}
+    """
+}
+
+process SCORE_TRAIT_DIRECT {
+    tag trait
+    label 'large'
+    publishDir "${params.outdir}/05_scores", mode: 'copy'
+
+    input:
+    tuple val(trait), path(weights), val(id_col), val(allele_col), val(effect_col),
+      val(pgen), val(pvar), val(psam)
+
+    output:
+    tuple val(trait), path("${trait}.sscore"), emit: scores
+    path "${trait}.sscore.vars"
+
+    script:
+    def inputPrefix = pgen.toString().replaceFirst(/[.]pgen$/, '')
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
+    """
+    test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
+    plink2 \
+      --pfile '${inputPrefix}' \
       --score ${weights} ${id_col} ${allele_col} ${effect_col} header center list-variants no-mean-imputation \
       --out ${trait} \
       --threads ${task.cpus} \
@@ -301,6 +353,34 @@ process HARMONIZE_PCA_PANEL {
     python ${harmonizer} \
       --panel ${panel} \
       --cohort-pvar ${pvar} \
+      --min-overlap ${params.min_pca_variant_overlap} \
+      --output-dir .
+    """
+}
+
+process HARMONIZE_PCA_PANEL_DIRECT {
+    tag params.cohort
+    label 'small'
+    container params.python_container
+    publishDir "${params.outdir}/06_pca/harmonization", mode: 'copy', pattern: 'panel_overlap*.tsv'
+
+    input:
+    tuple val(pgen), val(pvar), val(psam)
+    path panel
+    path harmonizer
+
+    output:
+    tuple val(pgen), val(pvar), val(psam), path('usable_cohort_ids.txt'),
+      path('rename_to_panel_ids.tsv'), path('reference_alleles.tsv'), emit: harmonized_inputs
+    path 'panel_overlap.tsv', emit: overlap
+    path 'panel_overlap_summary.tsv', emit: summary
+
+    script:
+    """
+    test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
+    python ${harmonizer} \
+      --panel ${panel} \
+      --cohort-pvar '${pvar}' \
       --min-overlap ${params.min_pca_variant_overlap} \
       --output-dir .
     """
@@ -351,6 +431,40 @@ process PREPARE_PCA_PFILE {
     """
     plink2 \
       --pfile ${inputPrefix} \
+      --extract ${usable_ids} \
+      --update-name ${rename_map} 1 2 \
+      --make-pgen \
+      --out renamed \
+      --threads ${task.cpus} \
+      --memory ${memMb}
+
+    plink2 \
+      --pfile renamed \
+      --ref-allele ${reference_alleles} 2 1 \
+      --make-pgen \
+      --out pca_input \
+      --threads ${task.cpus} \
+      --memory ${memMb}
+    """
+}
+
+process PREPARE_PCA_PFILE_DIRECT {
+    tag params.cohort
+    label 'large'
+
+    input:
+    tuple val(pgen), val(pvar), val(psam), path(usable_ids), path(rename_map), path(reference_alleles)
+
+    output:
+    tuple path('pca_input.pgen'), path('pca_input.pvar'), path('pca_input.psam'), emit: pfile
+
+    script:
+    def inputPrefix = pgen.toString().replaceFirst(/[.]pgen$/, '')
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
+    """
+    test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
+    plink2 \
+      --pfile '${inputPrefix}' \
       --extract ${usable_ids} \
       --update-name ${rename_map} 1 2 \
       --make-pgen \
@@ -428,6 +542,7 @@ process CLASSIFY_ANCESTRY {
 workflow {
     def skipRsid = flagEnabled(params.skip_rsid_annotation)
     def directInputsEnabled = flagEnabled(params.direct_inputs) || flagEnabled(params.fsx_direct)
+    def directPfileEnabled = params.input_pfile && directInputsEnabled
     def pcaEnabled = flagEnabled(params.run_pca)
     def scoresEnabled = flagEnabled(params.run_scores)
 
@@ -441,11 +556,19 @@ workflow {
 
     if (params.input_pfile) {
         def pfilePrefix = params.input_pfile.toString()
-        qcPfile = Channel.value(tuple(
-            file("${pfilePrefix}.pgen", checkIfExists: true),
-            file("${pfilePrefix}.pvar", checkIfExists: true),
-            file("${pfilePrefix}.psam", checkIfExists: true)
-        ))
+        if (directPfileEnabled) {
+            qcPfile = Channel.value(tuple(
+                "${pfilePrefix}.pgen",
+                "${pfilePrefix}.pvar",
+                "${pfilePrefix}.psam"
+            ))
+        } else {
+            qcPfile = Channel.value(tuple(
+                file("${pfilePrefix}.pgen", checkIfExists: true),
+                file("${pfilePrefix}.pvar", checkIfExists: true),
+                file("${pfilePrefix}.psam", checkIfExists: true)
+            ))
+        }
     } else {
         def chromosomes = chromosomeList(params.chromosomes)
         inputStrings = Channel.fromList(chromosomes).map { chr ->
@@ -480,7 +603,11 @@ workflow {
         qcPfile = MISSINGNESS_QC.out.pfile
     }
 
-    SUMMARY_QC(qcPfile)
+    if (directPfileEnabled) {
+        SUMMARY_QC_DIRECT(qcPfile)
+    } else {
+        SUMMARY_QC(qcPfile)
+    }
 
     if (pcaEnabled) {
         pcaReference = Channel.fromPath(params.pca_reference_sheet, checkIfExists: true)
@@ -525,9 +652,16 @@ workflow {
         pcaClassifierCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> refClassifier }
         pcaClassifierMetadataCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> metadata }
 
-        HARMONIZE_PCA_PANEL(qcPfile, pcaPanelCh, Channel.value(file("${projectDir}/bin/harmonize_pca_panel.py")))
-        PREPARE_PCA_PFILE(HARMONIZE_PCA_PANEL.out.harmonized_inputs)
-        PROJECT_GLOBAL_PCS(PREPARE_PCA_PFILE.out.pfile, pcaFrequenciesCh, pcaLoadingsCh)
+        if (directPfileEnabled) {
+            HARMONIZE_PCA_PANEL_DIRECT(qcPfile, pcaPanelCh, Channel.value(file("${projectDir}/bin/harmonize_pca_panel.py")))
+            PREPARE_PCA_PFILE_DIRECT(HARMONIZE_PCA_PANEL_DIRECT.out.harmonized_inputs)
+            pcaInput = PREPARE_PCA_PFILE_DIRECT.out.pfile
+        } else {
+            HARMONIZE_PCA_PANEL(qcPfile, pcaPanelCh, Channel.value(file("${projectDir}/bin/harmonize_pca_panel.py")))
+            PREPARE_PCA_PFILE(HARMONIZE_PCA_PANEL.out.harmonized_inputs)
+            pcaInput = PREPARE_PCA_PFILE.out.pfile
+        }
+        PROJECT_GLOBAL_PCS(pcaInput, pcaFrequenciesCh, pcaLoadingsCh)
         CLASSIFY_ANCESTRY(
             PROJECT_GLOBAL_PCS.out.scores,
             pcaClassifierCh,
@@ -557,6 +691,10 @@ workflow {
         scoreInputs = weights.combine(qcPfile).map { trait, weight, idCol, alleleCol, effectCol, pgen, pvar, psam ->
             tuple(trait, weight, idCol, alleleCol, effectCol, pgen, pvar, psam)
         }
-        SCORE_TRAIT(scoreInputs)
+        if (directPfileEnabled) {
+            SCORE_TRAIT_DIRECT(scoreInputs)
+        } else {
+            SCORE_TRAIT(scoreInputs)
+        }
     }
 }

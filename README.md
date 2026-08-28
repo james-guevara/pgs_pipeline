@@ -128,6 +128,11 @@ nextflow run main.nf -profile slurm \
 The input is treated as already QCed; use the VCF path when the pipeline should
 apply its own preprocessing and missingness thresholds.
 
+Add `--direct_inputs true` (or `--fsx_direct true` with the AWS FSx profile)
+when that PGEN prefix is on a filesystem mounted at the same absolute path on
+the controller and every worker. The workflow then reads the PGEN in place
+instead of staging it through the Nextflow work directory.
+
 `--direct_inputs` is executor-neutral: use it whenever controller and workers
 share the same absolute POSIX paths. Without it, Nextflow stages declared input
 files normally. Other schedulers can be added in a site-specific config passed
