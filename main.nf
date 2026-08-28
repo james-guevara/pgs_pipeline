@@ -359,7 +359,6 @@ process SCORE_TRAIT_DIRECT {
 
 process COLLATE_SCORE_RESULTS {
     label 'small'
-    container params.python_container
     publishDir "${params.outdir}/05_scores", mode: 'copy'
 
     input:
@@ -373,11 +372,9 @@ process COLLATE_SCORE_RESULTS {
 
     script:
     """
-    python ${collate_script} \
-      --scores ${sscores.join(' ')} \
-      --qcs ${score_qcs.join(' ')} \
-      --scores-out combined_scores.tsv \
-      --qc-out score_qc_summary.tsv
+    bash ${collate_script} \
+      combined_scores.tsv score_qc_summary.tsv \
+      ${sscores.join(' ')} -- ${score_qcs.join(' ')}
     """
 }
 
@@ -793,7 +790,7 @@ workflow {
         COLLATE_SCORE_RESULTS(
             scoreFiles,
             scoreQcFiles,
-            Channel.value(file("${projectDir}/bin/collate_scores.py"))
+            Channel.value(file("${projectDir}/bin/collate_scores.sh"))
         )
     }
 }
