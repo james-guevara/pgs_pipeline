@@ -19,6 +19,34 @@ The original Python and Slurm entrypoints remain for reference. `main.nf` is the
 portable orchestration entrypoint; cloud queues and filesystem mounts are
 deployment profiles, not part of the scientific workflow.
 
+## Reusable DSL2 workflow
+
+`main.nf` is a thin standalone wrapper around the named workflow in
+`workflows/pgs.nf`:
+
+```nextflow
+include { PGS_WORKFLOW } from './workflows/pgs'
+
+workflow {
+    PGS_WORKFLOW()
+}
+```
+
+This preserves every existing standalone parameter and process while allowing a
+larger DSL2 pipeline to include the PGS branch directly. `PGS_WORKFLOW` emits:
+
+- `qc_pfile`: the post-missingness-QC PGEN/PVAR/PSAM tuple, or the supplied QCed
+  PGEN tuple;
+- `combined_scores`: collated PGS values when scoring is enabled;
+- `global_pcs`, `ancestry_assignments`, and `within_ancestry` when PCA is enabled;
+- `analysis_dataset` and `analysis_dictionary` when both scoring and PCA are
+  enabled.
+
+Disabled optional branches emit empty channels. A composed parent workflow should
+set the same documented `params.*` values before invoking `PGS_WORKFLOW`; executor
+and container choices remain in configuration profiles. Do not launch this pipeline
+as a nested Nextflow process.
+
 ## Required inputs
 
 - One bgzipped VCF per chromosome.
