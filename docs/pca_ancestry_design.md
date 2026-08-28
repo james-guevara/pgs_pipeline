@@ -60,7 +60,7 @@ The workflow must publish:
 - `ancestry_probabilities.tsv`: sample IDs, final labels, and all class
   probabilities.
 - `within_ancestry/<group>/pcs.tsv`, or `skipped.tsv` with sample count and
-  threshold.
+  threshold, plus `within_ancestry/status.tsv` summarizing every group.
 - Reference ID, file checksums, software/container versions, and effective
   parameters in the run provenance.
 

@@ -19,8 +19,13 @@ params.maf = 0.01
 params.sample_miss = 0.05
 params.variant_miss = 0.05
 params.num_pcs = 10
+params.num_within_ancestry_pcs = 10
 params.min_pca_variant_overlap = 0.90
 params.min_ancestry_samples = 50
+params.within_ancestry_king_cutoff = 0.0884
+params.within_ancestry_ld_window = 200
+params.within_ancestry_ld_step = 50
+params.within_ancestry_ld_r2 = 0.2
 params.python_container = 'python:3.11-slim'
 params.fsx_direct = false
 params.direct_inputs = false
@@ -539,6 +544,38 @@ process CLASSIFY_ANCESTRY {
     """
 }
 
+process WITHIN_ANCESTRY_PCA {
+    tag params.cohort
+    label 'large'
+    publishDir "${params.outdir}/06_pca", mode: 'copy'
+
+    input:
+    tuple path(pgen), path(pvar), path(psam)
+    path ancestry_assignments
+    path within_ancestry_script
+
+    output:
+    path 'within_ancestry', emit: groups
+
+    script:
+    def inputPrefix = pgen.baseName
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
+    """
+    bash ${within_ancestry_script} \
+      ${inputPrefix} \
+      ${ancestry_assignments} \
+      ${params.min_ancestry_samples} \
+      ${params.num_within_ancestry_pcs} \
+      ${params.within_ancestry_king_cutoff} \
+      ${params.within_ancestry_ld_window} \
+      ${params.within_ancestry_ld_step} \
+      ${params.within_ancestry_ld_r2} \
+      ${task.cpus} \
+      ${memMb} \
+      within_ancestry
+    """
+}
+
 workflow {
     def skipRsid = flagEnabled(params.skip_rsid_annotation)
     def directInputsEnabled = flagEnabled(params.direct_inputs) || flagEnabled(params.fsx_direct)
@@ -667,6 +704,11 @@ workflow {
             pcaClassifierCh,
             pcaClassifierMetadataCh,
             Channel.value(file("${projectDir}/bin/apply_extra_trees.py"))
+        )
+        WITHIN_ANCESTRY_PCA(
+            pcaInput,
+            CLASSIFY_ANCESTRY.out.assignments,
+            Channel.value(file("${projectDir}/bin/run_within_ancestry_pca.sh"))
         )
     }
 

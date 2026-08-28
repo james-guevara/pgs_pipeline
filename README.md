@@ -12,7 +12,8 @@ run unchanged with local Docker or AWS Batch.
 4. Produce missingness, Hardy-Weinberg, and allele-frequency summaries.
 5. Optionally calculate PGS values from externally generated weight files.
 6. Project onto a fixed 1000 Genomes PCA reference and assign ancestry with
-   probabilities. Within-ancestry PCs are the remaining required PCA stage.
+   probabilities, then calculate within-ancestry PCs using unrelated training
+   subsets and project every confidently assigned sample in each eligible group.
 
 The original Python and Slurm entrypoints remain for reference. `main.nf` is the
 portable orchestration entrypoint; cloud queues and filesystem mounts are
@@ -163,8 +164,13 @@ work directory, and AWS CLI in the task image ([Nextflow documentation](https://
 | `run_pca` | `false` | Run reference validation, harmonization, global projection, and ancestry assignment |
 | `pca_reference_sheet` | unset | One-row reference artifact manifest; see `examples/pca_reference.tsv` |
 | `num_pcs` | `10` | Number of global reference PCs to project |
+| `num_within_ancestry_pcs` | `10` | Maximum PCs calculated within each ancestry group |
 | `min_pca_variant_overlap` | `0.90` | Minimum usable fraction of the fixed PCA panel |
 | `min_ancestry_samples` | `50` | Minimum group size for within-ancestry PCA |
+| `within_ancestry_king_cutoff` | `0.0884` | KING relatedness cutoff for the unrelated PCA training subset |
+| `within_ancestry_ld_window` | `200` | LD-pruning window size in variants |
+| `within_ancestry_ld_step` | `50` | LD-pruning step size in variants |
+| `within_ancestry_ld_r2` | `0.2` | LD-pruning r-squared threshold |
 | `r2` / `aq` | unset | Optional VCF INFO filter; R2 takes precedence |
 
 Resource defaults live in `nextflow.config` and can be overridden with `-c`.
