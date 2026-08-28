@@ -44,9 +44,18 @@ for ancestry in AFR AMR EAS EUR SAS; do
         continue
     fi
 
+    ld_sample_override=()
+    if (( assigned < 50 )); then
+        # PLINK refuses LD estimation below 50 samples by default. The user has
+        # explicitly requested best-effort PCs for these groups; their outputs
+        # remain marked unreliable_small_sample.
+        ld_sample_override=(--bad-ld)
+    fi
+
     plink2 \
       --pfile "$pfile" \
       --keep "$keep_file" \
+      "${ld_sample_override[@]}" \
       --indep-pairwise "$ld_window" "$ld_step" "$ld_r2" \
       --out "$group_dir/prune" \
       --threads "$cpus" \
