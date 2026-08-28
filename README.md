@@ -53,6 +53,15 @@ controller itself receives a small `ind-shared` allocation and submits the scien
 processes through the existing Expanse profile. This avoids login-node native-thread
 limits when many chromosome or score tasks finish together.
 
+### Reusable-workflow regression validation
+
+The named-workflow refactor was validated on the G2MH integrated-analysis inputs
+with Nextflow 26.04.6 on Expanse. The fresh run completed successfully in 7 minutes
+11 seconds. Its final `analysis_dataset.tsv` (1,043 participants and 55 variables)
+and `analysis_dataset_dictionary.tsv` were byte-for-byte identical to the outputs
+from the previously validated standalone workflow. This verifies that exposing the
+workflow as `PGS_WORKFLOW` changed orchestration only, not scientific results.
+
 ## Required inputs
 
 - One bgzipped VCF per chromosome.
