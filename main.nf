@@ -9,6 +9,9 @@ params.genome_build = 'GRCh38'
 params.outdir = 'results'
 params.score_sheet = null
 params.run_scores = false
+params.run_summary_qc = true
+params.min_score_variant_match = 0.50
+params.warn_score_variant_match = 0.80
 params.run_pca = false
 params.pca_reference_sheet = null
 params.r2 = null
@@ -291,9 +294,10 @@ process SCORE_TRAIT {
 
     input:
     tuple val(trait), path(weights), val(id_col), val(allele_col), val(effect_col), path(pgen), path(pvar), path(psam)
+    path summary_script
 
     output:
-    tuple val(trait), path("${trait}.sscore"), emit: scores
+    tuple val(trait), path("${trait}.sscore"), path("${trait}.score_qc.tsv"), emit: scored
     path "${trait}.sscore.vars"
 
     script:
@@ -306,6 +310,14 @@ process SCORE_TRAIT {
       --out ${trait} \
       --threads ${task.cpus} \
       --memory ${memMb}
+    requested=${'$'}(awk 'NR > 1 { n++ } END { print n + 0 }' ${weights})
+    matched=${'$'}(wc -l < ${trait}.sscore.vars)
+    fraction=${'$'}(awk -v m="${'$'}matched" -v r="${'$'}requested" 'BEGIN { if (r == 0) print 0; else printf "%.8f", m / r }')
+    awk -v trait='${trait}' -v requested="${'$'}requested" -v matched="${'$'}matched" \
+      -v fraction="${'$'}fraction" -v warn='${params.warn_score_variant_match}' \
+      -f ${summary_script} ${trait}.sscore > ${trait}.score_qc.tsv
+    awk -v f="${'$'}fraction" -v minimum='${params.min_score_variant_match}' \
+      'BEGIN { if (f < minimum) { printf "ERROR: score variant match fraction %.4f is below minimum %.4f\\n", f, minimum > "/dev/stderr"; exit 1 } }'
     """
 }
 
@@ -317,9 +329,10 @@ process SCORE_TRAIT_DIRECT {
     input:
     tuple val(trait), path(weights), val(id_col), val(allele_col), val(effect_col),
       val(pgen), val(pvar), val(psam)
+    path summary_script
 
     output:
-    tuple val(trait), path("${trait}.sscore"), emit: scores
+    tuple val(trait), path("${trait}.sscore"), path("${trait}.score_qc.tsv"), emit: scored
     path "${trait}.sscore.vars"
 
     script:
@@ -333,6 +346,38 @@ process SCORE_TRAIT_DIRECT {
       --out ${trait} \
       --threads ${task.cpus} \
       --memory ${memMb}
+    requested=${'$'}(awk 'NR > 1 { n++ } END { print n + 0 }' ${weights})
+    matched=${'$'}(wc -l < ${trait}.sscore.vars)
+    fraction=${'$'}(awk -v m="${'$'}matched" -v r="${'$'}requested" 'BEGIN { if (r == 0) print 0; else printf "%.8f", m / r }')
+    awk -v trait='${trait}' -v requested="${'$'}requested" -v matched="${'$'}matched" \
+      -v fraction="${'$'}fraction" -v warn='${params.warn_score_variant_match}' \
+      -f ${summary_script} ${trait}.sscore > ${trait}.score_qc.tsv
+    awk -v f="${'$'}fraction" -v minimum='${params.min_score_variant_match}' \
+      'BEGIN { if (f < minimum) { printf "ERROR: score variant match fraction %.4f is below minimum %.4f\\n", f, minimum > "/dev/stderr"; exit 1 } }'
+    """
+}
+
+process COLLATE_SCORE_RESULTS {
+    label 'small'
+    container params.python_container
+    publishDir "${params.outdir}/05_scores", mode: 'copy'
+
+    input:
+    path sscores
+    path score_qcs
+    path collate_script
+
+    output:
+    path 'combined_scores.tsv'
+    path 'score_qc_summary.tsv'
+
+    script:
+    """
+    python ${collate_script} \
+      --scores ${sscores.join(' ')} \
+      --qcs ${score_qcs.join(' ')} \
+      --scores-out combined_scores.tsv \
+      --qc-out score_qc_summary.tsv
     """
 }
 
@@ -582,6 +627,7 @@ workflow {
     def directPfileEnabled = params.input_pfile && directInputsEnabled
     def pcaEnabled = flagEnabled(params.run_pca)
     def scoresEnabled = flagEnabled(params.run_scores)
+    def summaryQcEnabled = flagEnabled(params.run_summary_qc)
 
     if (pcaEnabled && !params.pca_reference_sheet) {
         error '--pca_reference_sheet is required when --run_pca is true'
@@ -640,10 +686,12 @@ workflow {
         qcPfile = MISSINGNESS_QC.out.pfile
     }
 
-    if (directPfileEnabled) {
-        SUMMARY_QC_DIRECT(qcPfile)
-    } else {
-        SUMMARY_QC(qcPfile)
+    if (summaryQcEnabled) {
+        if (directPfileEnabled) {
+            SUMMARY_QC_DIRECT(qcPfile)
+        } else {
+            SUMMARY_QC(qcPfile)
+        }
     }
 
     if (pcaEnabled) {
@@ -734,9 +782,18 @@ workflow {
             tuple(trait, weight, idCol, alleleCol, effectCol, pgen, pvar, psam)
         }
         if (directPfileEnabled) {
-            SCORE_TRAIT_DIRECT(scoreInputs)
+            SCORE_TRAIT_DIRECT(scoreInputs, Channel.value(file("${projectDir}/bin/summarize_score.awk")))
+            scoredResults = SCORE_TRAIT_DIRECT.out.scored
         } else {
-            SCORE_TRAIT(scoreInputs)
+            SCORE_TRAIT(scoreInputs, Channel.value(file("${projectDir}/bin/summarize_score.awk")))
+            scoredResults = SCORE_TRAIT.out.scored
         }
+        scoreFiles = scoredResults.map { trait, score, qc -> score }.collect()
+        scoreQcFiles = scoredResults.map { trait, score, qc -> qc }.collect()
+        COLLATE_SCORE_RESULTS(
+            scoreFiles,
+            scoreQcFiles,
+            Channel.value(file("${projectDir}/bin/collate_scores.py"))
+        )
     }
 }

@@ -161,6 +161,9 @@ work directory, and AWS CLI in the task image ([Nextflow documentation](https://
 | `variant_miss` | `0.05` | Variant missingness threshold |
 | `sample_miss` | `0.05` | Sample missingness threshold |
 | `run_scores` | `false` | Run PLINK2 scoring branch |
+| `run_summary_qc` | `true` | Generate cohort-wide missingness, HWE, and frequency summaries; set false for repeated scoring-only runs |
+| `min_score_variant_match` | `0.50` | Fail a trait when fewer than this fraction of weight variants are scored |
+| `warn_score_variant_match` | `0.80` | Flag a trait QC row below this match fraction |
 | `run_pca` | `false` | Run reference validation, harmonization, global projection, and ancestry assignment |
 | `pca_reference_sheet` | unset | One-row reference artifact manifest; see `examples/pca_reference.tsv` |
 | `num_pcs` | `10` | Number of global reference PCs to project |
@@ -176,6 +179,8 @@ work directory, and AWS CLI in the task image ([Nextflow documentation](https://
 Resource defaults live in `nextflow.config` and can be overridden with `-c`.
 Scoring uses a dedicated portable default of 4 CPUs and 8 GB RAM; site adapters
 can override the `scoring` process label without changing the workflow.
+Each scoring run publishes per-trait QC, `combined_scores.tsv`, and
+`score_qc_summary.tsv` alongside the PLINK score files.
 `config.toml.example` is only for the legacy Python entrypoints.
 
 ## Weight-generation boundary
