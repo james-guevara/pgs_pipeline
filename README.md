@@ -174,6 +174,8 @@ work directory, and AWS CLI in the task image ([Nextflow documentation](https://
 | `r2` / `aq` | unset | Optional VCF INFO filter; R2 takes precedence |
 
 Resource defaults live in `nextflow.config` and can be overridden with `-c`.
+Scoring uses a dedicated portable default of 4 CPUs and 8 GB RAM; site adapters
+can override the `scoring` process label without changing the workflow.
 `config.toml.example` is only for the legacy Python entrypoints.
 
 ## Weight-generation boundary

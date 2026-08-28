@@ -286,7 +286,7 @@ process SUMMARY_QC_DIRECT {
 
 process SCORE_TRAIT {
     tag trait
-    label 'large'
+    label 'scoring'
     publishDir "${params.outdir}/05_scores", mode: 'copy'
 
     input:
@@ -311,7 +311,7 @@ process SCORE_TRAIT {
 
 process SCORE_TRAIT_DIRECT {
     tag trait
-    label 'large'
+    label 'scoring'
     publishDir "${params.outdir}/05_scores", mode: 'copy'
 
     input:
