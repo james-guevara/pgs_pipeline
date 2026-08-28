@@ -86,10 +86,20 @@ for ancestry in AFR AMR EAS EUR SAS; do
       --threads "$cpus" \
       --memory "$memory_mb"
 
+    awk 'NR > 1 && $5 > 0 && $5 < $6 {print $2}' "$group_dir/training.acount" > "$group_dir/training_polymorphic.ids"
+    pca_variants=$(wc -l < "$group_dir/training_polymorphic.ids")
+    if (( pca_variants == 0 )); then
+        printf 'ancestry\tassigned_samples\tunrelated_training_samples\treason\n%s\t%d\t%d\tno_polymorphic_training_variants\n' \
+          "$ancestry" "$assigned" "$unrelated" > "$group_dir/skipped.tsv"
+        printf '%s\t%d\t%d\t0\t0\tskipped\tno_polymorphic_training_variants\n' \
+          "$ancestry" "$assigned" "$unrelated" >> "$status_file"
+        continue
+    fi
+
     plink2 \
       --pfile "$pfile" \
       --keep "$group_dir/king.king.cutoff.in.id" \
-      --extract "$group_dir/prune.prune.in" \
+      --extract "$group_dir/training_polymorphic.ids" \
       --pca allele-wts "$group_pcs" \
       --out "$group_dir/training" \
       --threads "$cpus" \
@@ -98,7 +108,7 @@ for ancestry in AFR AMR EAS EUR SAS; do
     plink2 \
       --pfile "$pfile" \
       --keep "$keep_file" \
-      --extract "$group_dir/prune.prune.in" \
+      --extract "$group_dir/training_polymorphic.ids" \
       --read-freq "$group_dir/training.acount" \
       --score "$group_dir/training.eigenvec.allele" 2 5 header-read no-mean-imputation variance-standardize \
       --score-col-nums "6-$last_pc" \
@@ -108,5 +118,5 @@ for ancestry in AFR AMR EAS EUR SAS; do
 
     cp "$group_dir/projected.sscore" "$group_dir/pcs.tsv"
     printf '%s\t%d\t%d\t%d\t%d\tcompleted\t.\n' \
-      "$ancestry" "$assigned" "$unrelated" "$pruned_variants" "$group_pcs" >> "$status_file"
+      "$ancestry" "$assigned" "$unrelated" "$pca_variants" "$group_pcs" >> "$status_file"
 done
