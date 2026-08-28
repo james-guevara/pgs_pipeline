@@ -23,9 +23,9 @@ if (( ${#scores[@]} == 0 || ${#qcs[@]} == 0 )); then
     exit 2
 fi
 
-reference_ids=$(mktemp)
-next_ids=$(mktemp)
-next_column=$(mktemp)
+reference_ids=.reference_ids.tsv
+next_ids=.next_ids.tsv
+next_column=.next_score.tsv
 trap 'rm -f "$reference_ids" "$next_ids" "$next_column"' EXIT
 
 first=true
