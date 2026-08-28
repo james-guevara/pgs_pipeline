@@ -47,6 +47,12 @@ set the same documented `params.*` values before invoking `PGS_WORKFLOW`; execut
 and container choices remain in configuration profiles. Do not launch this pipeline
 as a nested Nextflow process.
 
+On Expanse, submit the long-lived controller through
+`scripts/run_nextflow_expanse.sh` rather than running Java on a login node. The
+controller itself receives a small `ind-shared` allocation and submits the scientific
+processes through the existing Expanse profile. This avoids login-node native-thread
+limits when many chromosome or score tasks finish together.
+
 ## Required inputs
 
 - One bgzipped VCF per chromosome.
