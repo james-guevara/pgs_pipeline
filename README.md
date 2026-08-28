@@ -26,6 +26,10 @@ deployment profiles, not part of the scientific workflow.
 - For scoring, a tab-separated manifest with `trait`, `weights`, `id_col`,
   `allele_col`, and `effect_col` columns. See `examples/scores.tsv`.
 
+The currently tested PCA and provisional scoring resources are indexed under
+`resources/`, with ready-to-use manifests for Expanse and AWS. Large artifacts
+remain in versioned shared-storage locations rather than in this repository.
+
 Input patterns must contain the literal `{chr}` placeholder. Local paths and S3
 URIs are supported. The existing rsID maps are available from
 [Google Drive](https://drive.google.com/drive/folders/199d80SdlSaYum8GNCQkFnh8zvhArmxnj?usp=sharing).

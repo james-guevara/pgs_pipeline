@@ -1,0 +1,5 @@
+resource_id	resource_type	version	status	genome_build	expanse_location	aws_location	notes
+1kg_grch38_v1	PCA reference	1kg_grch38_v1	fixed	GRCh38	/expanse/projects/sebat1/s3/data/sebat/pgs_wf_1kg/releases/1kg_grch38_v1/	s3://sebat-genomics-work/reference/pgs/1kg_grch38_v1/	Panel, frequencies, loadings, reference scores, labels, classifier, metadata, and checksums
+g2mh_provisional_v1	PGS weights	g2mh-provisional-v1	provisional	GRCh38	/expanse/projects/sebat1/a1sriniv/pgs_sumstats_organized/processed/txt_weights/	s3://sebat-genomics-work/weights/pgs/g2mh-provisional-v1/	20 current weight files; upstream method and trait set are not finalized
+plink2	Runtime container	2.0.0a.6.9	pinned	NA	quay.io/biocontainers/plink2:2.0.0a.6.9--h9948957_0	quay.io/biocontainers/plink2:2.0.0a.6.9--h9948957_0	May be mirrored to a site registry or converted to Apptainer SIF
+python	Runtime container	3.11.16-bookworm	pinned	NA	python:3.11.16-bookworm	python:3.11.16-bookworm	Used by PCA validation, ancestry classification, and analysis-dataset assembly
