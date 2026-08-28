@@ -23,6 +23,11 @@ if (( ${#scores[@]} == 0 || ${#qcs[@]} == 0 )); then
     exit 2
 fi
 
+# Channel completion order depends on the executor, so stabilize published
+# column and row order by the trait-derived filenames.
+mapfile -t scores < <(printf '%s\n' "${scores[@]}" | sort)
+mapfile -t qcs < <(printf '%s\n' "${qcs[@]}" | sort)
+
 reference_ids=.reference_ids.tsv
 next_ids=.next_ids.tsv
 next_column=.next_score.tsv
