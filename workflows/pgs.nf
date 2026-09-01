@@ -761,7 +761,7 @@ workflow PGS_WORKFLOW {
 
         VALIDATE_PCA_REFERENCE(
             pcaReference,
-            Channel.value(file("${projectDir}/bin/validate_pca_reference.py"))
+            Channel.value(file("${moduleDir}/../bin/validate_pca_reference.py"))
         )
         validatedReference = VALIDATE_PCA_REFERENCE.out.reference
         pcaPanelCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> panelFile }
@@ -771,11 +771,11 @@ workflow PGS_WORKFLOW {
         pcaClassifierMetadataCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> metadata }
 
         if (directPfileEnabled) {
-            HARMONIZE_PCA_PANEL_DIRECT(qcPfile, pcaPanelCh, Channel.value(file("${projectDir}/bin/harmonize_pca_panel.py")))
+            HARMONIZE_PCA_PANEL_DIRECT(qcPfile, pcaPanelCh, Channel.value(file("${moduleDir}/../bin/harmonize_pca_panel.py")))
             PREPARE_PCA_PFILE_DIRECT(HARMONIZE_PCA_PANEL_DIRECT.out.harmonized_inputs)
             pcaInput = PREPARE_PCA_PFILE_DIRECT.out.pfile
         } else {
-            HARMONIZE_PCA_PANEL(qcPfile, pcaPanelCh, Channel.value(file("${projectDir}/bin/harmonize_pca_panel.py")))
+            HARMONIZE_PCA_PANEL(qcPfile, pcaPanelCh, Channel.value(file("${moduleDir}/../bin/harmonize_pca_panel.py")))
             PREPARE_PCA_PFILE(HARMONIZE_PCA_PANEL.out.harmonized_inputs)
             pcaInput = PREPARE_PCA_PFILE.out.pfile
         }
@@ -785,21 +785,21 @@ workflow PGS_WORKFLOW {
             PROJECT_GLOBAL_PCS.out.scores,
             pcaClassifierCh,
             pcaClassifierMetadataCh,
-            Channel.value(file("${projectDir}/bin/apply_extra_trees.py"))
+            Channel.value(file("${moduleDir}/../bin/apply_extra_trees.py"))
         )
         ancestryResults = CLASSIFY_ANCESTRY.out.assignments
         if (directPfileEnabled) {
             WITHIN_ANCESTRY_PCA_DIRECT(
                 qcPfile,
                 CLASSIFY_ANCESTRY.out.assignments,
-                Channel.value(file("${projectDir}/bin/run_within_ancestry_pca.sh"))
+                Channel.value(file("${moduleDir}/../bin/run_within_ancestry_pca.sh"))
             )
             withinAncestryResults = WITHIN_ANCESTRY_PCA_DIRECT.out.groups
         } else {
             WITHIN_ANCESTRY_PCA(
                 qcPfile,
                 CLASSIFY_ANCESTRY.out.assignments,
-                Channel.value(file("${projectDir}/bin/run_within_ancestry_pca.sh"))
+                Channel.value(file("${moduleDir}/../bin/run_within_ancestry_pca.sh"))
             )
             withinAncestryResults = WITHIN_ANCESTRY_PCA.out.groups
         }
@@ -827,10 +827,10 @@ workflow PGS_WORKFLOW {
             tuple(trait, weight, idCol, alleleCol, effectCol, pgen, pvar, psam)
         }
         if (directPfileEnabled) {
-            SCORE_TRAIT_DIRECT(scoreInputs, Channel.value(file("${projectDir}/bin/summarize_score.awk")))
+            SCORE_TRAIT_DIRECT(scoreInputs, Channel.value(file("${moduleDir}/../bin/summarize_score.awk")))
             scoredResults = SCORE_TRAIT_DIRECT.out.scored
         } else {
-            SCORE_TRAIT(scoreInputs, Channel.value(file("${projectDir}/bin/summarize_score.awk")))
+            SCORE_TRAIT(scoreInputs, Channel.value(file("${moduleDir}/../bin/summarize_score.awk")))
             scoredResults = SCORE_TRAIT.out.scored
         }
         scoreFiles = scoredResults.map { trait, score, qc -> score }.collect()
@@ -838,7 +838,7 @@ workflow PGS_WORKFLOW {
         COLLATE_SCORE_RESULTS(
             scoreFiles,
             scoreQcFiles,
-            Channel.value(file("${projectDir}/bin/collate_scores.sh"))
+            Channel.value(file("${moduleDir}/../bin/collate_scores.sh"))
         )
         combinedScoreResults = COLLATE_SCORE_RESULTS.out.combined
     }
@@ -849,7 +849,7 @@ workflow PGS_WORKFLOW {
             globalPcResults,
             ancestryResults,
             withinAncestryResults,
-            Channel.value(file("${projectDir}/bin/build_analysis_dataset.py"))
+            Channel.value(file("${moduleDir}/../bin/build_analysis_dataset.py"))
         )
         analysisDatasetResults = BUILD_ANALYSIS_DATASET.out.dataset
         analysisDictionaryResults = BUILD_ANALYSIS_DATASET.out.dictionary

@@ -36,6 +36,8 @@ class NextflowStructureTest(unittest.TestCase):
     def test_named_workflow_exposes_composition_outputs(self):
         source = (ROOT / "workflows" / "pgs.nf").read_text()
         self.assertIn("workflow PGS_WORKFLOW", source)
+        self.assertNotIn("${projectDir}/bin/", source)
+        self.assertIn("${moduleDir}/../bin/", source)
         for name in (
             "qc_pfile",
             "combined_scores",
