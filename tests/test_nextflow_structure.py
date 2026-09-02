@@ -36,18 +36,36 @@ class NextflowStructureTest(unittest.TestCase):
     def test_named_workflow_exposes_composition_outputs(self):
         source = (ROOT / "workflows" / "pgs.nf").read_text()
         self.assertIn("workflow PGS_WORKFLOW", source)
+        self.assertIn("workflow ANCESTRY_WORKFLOW", source)
+        self.assertIn("ANCESTRY_WORKFLOW(qcPfile, directPfileEnabled)", source)
         self.assertNotIn("${projectDir}/bin/", source)
         self.assertIn("${moduleDir}/../bin/", source)
         for name in (
             "qc_pfile",
             "combined_scores",
             "global_pcs",
+            "projection_variants",
             "ancestry_assignments",
             "within_ancestry",
             "analysis_dataset",
             "analysis_dictionary",
         ):
             self.assertIn(f"{name} =", source)
+
+    def test_detachable_ancestry_wrapper_uses_named_workflow(self):
+        source = (ROOT / "ancestry.nf").read_text()
+        self.assertIn("include { ANCESTRY_WORKFLOW }", source)
+        self.assertIn("--input_pfile is required", source)
+        self.assertIn("ANCESTRY_WORKFLOW(qcPfile, directPfileEnabled)", source)
+
+        workflow = (ROOT / "workflows" / "pgs.nf").read_text()
+        for name in (
+            "global_pcs",
+            "projection_variants",
+            "ancestry_assignments",
+            "within_ancestry",
+        ):
+            self.assertIn(f"{name} =", workflow)
 
 
 if __name__ == "__main__":

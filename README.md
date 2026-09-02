@@ -32,13 +32,32 @@ workflow {
 }
 ```
 
+The ancestry/PCA branch is also independently runnable from an already QCed
+PLINK 2 fileset. This keeps score calculation independent from changes to the
+ancestry reference, classifier, or within-ancestry PCA policy:
+
+```bash
+nextflow run ancestry.nf -profile local \
+  --input_pfile /path/to/cohort_qc \
+  --pca_reference_sheet /path/to/pca_reference.tsv \
+  --genome_build GRCh38 \
+  --outdir results/ancestry
+```
+
+`ancestry.nf` runs fixed-reference 1000 Genomes projection, ancestry
+classification, and within-ancestry PCA. It emits the projected PCs, exact
+projection-variant list, ancestry assignments/probabilities, and
+within-ancestry results. The combined `PGS_WORKFLOW` invokes the same named
+`ANCESTRY_WORKFLOW`; there is no second implementation.
+
 This preserves every existing standalone parameter and process while allowing a
 larger DSL2 pipeline to include the PGS branch directly. `PGS_WORKFLOW` emits:
 
 - `qc_pfile`: the post-missingness-QC PGEN/PVAR/PSAM tuple, or the supplied QCed
   PGEN tuple;
 - `combined_scores`: collated PGS values when scoring is enabled;
-- `global_pcs`, `ancestry_assignments`, and `within_ancestry` when PCA is enabled;
+- `global_pcs`, `projection_variants`, `ancestry_assignments`, and
+  `within_ancestry` when PCA is enabled;
 - `analysis_dataset` and `analysis_dictionary` when both scoring and PCA are
   enabled.
 

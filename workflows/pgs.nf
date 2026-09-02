@@ -647,6 +647,97 @@ process WITHIN_ANCESTRY_PCA_DIRECT {
     """
 }
 
+workflow ANCESTRY_WORKFLOW {
+    take:
+    qcPfile
+    directPfileEnabled
+
+    main:
+    if (!params.pca_reference_sheet) {
+        error '--pca_reference_sheet is required for ancestry/PCA'
+    }
+
+    pcaReference = Channel.fromPath(params.pca_reference_sheet, checkIfExists: true)
+        .splitCsv(header: true, sep: '\t', strip: true)
+        .map { row ->
+            def required = ['reference_id', 'genome_build', 'panel_variants', 'allele_frequencies',
+                'loadings', 'classifier', 'classifier_metadata', 'checksums']
+            def missing = required.findAll { !row[it] }
+            if (missing) {
+                error "PCA reference sheet missing values: ${missing.join(', ')}"
+            }
+            if (row.genome_build.toString() != params.genome_build.toString()) {
+                error "Cohort genome build ${params.genome_build} does not match PCA reference build ${row.genome_build}"
+            }
+            tuple(
+                row.reference_id.toString(),
+                row.genome_build.toString(),
+                file(row.panel_variants.toString(), checkIfExists: true),
+                file(row.allele_frequencies.toString(), checkIfExists: true),
+                file(row.loadings.toString(), checkIfExists: true),
+                file(row.classifier.toString(), checkIfExists: true),
+                file(row.classifier_metadata.toString(), checkIfExists: true),
+                file(row.checksums.toString(), checkIfExists: true)
+            )
+        }
+        .collect(flat: false)
+        .map { rows ->
+            if (rows.size() != 1) {
+                error 'PCA reference sheet must contain exactly one data row'
+            }
+            rows[0]
+        }
+
+    VALIDATE_PCA_REFERENCE(
+        pcaReference,
+        Channel.value(file("${moduleDir}/../bin/validate_pca_reference.py"))
+    )
+    validatedReference = VALIDATE_PCA_REFERENCE.out.reference
+    pcaPanelCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> panelFile }
+    pcaFrequenciesCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> refFrequencies }
+    pcaLoadingsCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> refLoadings }
+    pcaClassifierCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> refClassifier }
+    pcaClassifierMetadataCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> metadata }
+
+    if (directPfileEnabled) {
+        HARMONIZE_PCA_PANEL_DIRECT(qcPfile, pcaPanelCh, Channel.value(file("${moduleDir}/../bin/harmonize_pca_panel.py")))
+        PREPARE_PCA_PFILE_DIRECT(HARMONIZE_PCA_PANEL_DIRECT.out.harmonized_inputs)
+        pcaInput = PREPARE_PCA_PFILE_DIRECT.out.pfile
+    } else {
+        HARMONIZE_PCA_PANEL(qcPfile, pcaPanelCh, Channel.value(file("${moduleDir}/../bin/harmonize_pca_panel.py")))
+        PREPARE_PCA_PFILE(HARMONIZE_PCA_PANEL.out.harmonized_inputs)
+        pcaInput = PREPARE_PCA_PFILE.out.pfile
+    }
+    PROJECT_GLOBAL_PCS(pcaInput, pcaFrequenciesCh, pcaLoadingsCh)
+    CLASSIFY_ANCESTRY(
+        PROJECT_GLOBAL_PCS.out.scores,
+        pcaClassifierCh,
+        pcaClassifierMetadataCh,
+        Channel.value(file("${moduleDir}/../bin/apply_extra_trees.py"))
+    )
+    if (directPfileEnabled) {
+        WITHIN_ANCESTRY_PCA_DIRECT(
+            qcPfile,
+            CLASSIFY_ANCESTRY.out.assignments,
+            Channel.value(file("${moduleDir}/../bin/run_within_ancestry_pca.sh"))
+        )
+        withinAncestryResults = WITHIN_ANCESTRY_PCA_DIRECT.out.groups
+    } else {
+        WITHIN_ANCESTRY_PCA(
+            qcPfile,
+            CLASSIFY_ANCESTRY.out.assignments,
+            Channel.value(file("${moduleDir}/../bin/run_within_ancestry_pca.sh"))
+        )
+        withinAncestryResults = WITHIN_ANCESTRY_PCA.out.groups
+    }
+
+    emit:
+    global_pcs = PROJECT_GLOBAL_PCS.out.scores
+    projection_variants = PROJECT_GLOBAL_PCS.out.variants
+    ancestry_assignments = CLASSIFY_ANCESTRY.out.assignments
+    within_ancestry = withinAncestryResults
+}
+
 workflow PGS_WORKFLOW {
     main:
     def skipRsid = flagEnabled(params.skip_rsid_annotation)
@@ -656,15 +747,12 @@ workflow PGS_WORKFLOW {
     def scoresEnabled = flagEnabled(params.run_scores)
     def summaryQcEnabled = flagEnabled(params.run_summary_qc)
     def globalPcResults = Channel.empty()
+    def projectionVariantResults = Channel.empty()
     def ancestryResults = Channel.empty()
     def withinAncestryResults = Channel.empty()
     def combinedScoreResults = Channel.empty()
     def analysisDatasetResults = Channel.empty()
     def analysisDictionaryResults = Channel.empty()
-
-    if (pcaEnabled && !params.pca_reference_sheet) {
-        error '--pca_reference_sheet is required when --run_pca is true'
-    }
 
     if (!params.input_pfile && (!params.vcfs || (!params.rsid_maps && !skipRsid))) {
         error '--vcfs is required, and --rsid_maps is required unless --skip_rsid_annotation is true; alternatively provide --input_pfile with a QCed PLINK 2 prefix.'
@@ -728,81 +816,11 @@ workflow PGS_WORKFLOW {
     }
 
     if (pcaEnabled) {
-        pcaReference = Channel.fromPath(params.pca_reference_sheet, checkIfExists: true)
-            .splitCsv(header: true, sep: '\t', strip: true)
-            .map { row ->
-                def required = ['reference_id', 'genome_build', 'panel_variants', 'allele_frequencies',
-                    'loadings', 'classifier', 'classifier_metadata', 'checksums']
-                def missing = required.findAll { !row[it] }
-                if (missing) {
-                    error "PCA reference sheet missing values: ${missing.join(', ')}"
-                }
-                if (row.genome_build.toString() != params.genome_build.toString()) {
-                    error "Cohort genome build ${params.genome_build} does not match PCA reference build ${row.genome_build}"
-                }
-                tuple(
-                    row.reference_id.toString(),
-                    row.genome_build.toString(),
-                    file(row.panel_variants.toString(), checkIfExists: true),
-                    file(row.allele_frequencies.toString(), checkIfExists: true),
-                    file(row.loadings.toString(), checkIfExists: true),
-                    file(row.classifier.toString(), checkIfExists: true),
-                    file(row.classifier_metadata.toString(), checkIfExists: true),
-                    file(row.checksums.toString(), checkIfExists: true)
-                )
-            }
-            .collect(flat: false)
-            .map { rows ->
-                if (rows.size() != 1) {
-                    error 'PCA reference sheet must contain exactly one data row'
-                }
-                rows[0]
-            }
-
-        VALIDATE_PCA_REFERENCE(
-            pcaReference,
-            Channel.value(file("${moduleDir}/../bin/validate_pca_reference.py"))
-        )
-        validatedReference = VALIDATE_PCA_REFERENCE.out.reference
-        pcaPanelCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> panelFile }
-        pcaFrequenciesCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> refFrequencies }
-        pcaLoadingsCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> refLoadings }
-        pcaClassifierCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> refClassifier }
-        pcaClassifierMetadataCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> metadata }
-
-        if (directPfileEnabled) {
-            HARMONIZE_PCA_PANEL_DIRECT(qcPfile, pcaPanelCh, Channel.value(file("${moduleDir}/../bin/harmonize_pca_panel.py")))
-            PREPARE_PCA_PFILE_DIRECT(HARMONIZE_PCA_PANEL_DIRECT.out.harmonized_inputs)
-            pcaInput = PREPARE_PCA_PFILE_DIRECT.out.pfile
-        } else {
-            HARMONIZE_PCA_PANEL(qcPfile, pcaPanelCh, Channel.value(file("${moduleDir}/../bin/harmonize_pca_panel.py")))
-            PREPARE_PCA_PFILE(HARMONIZE_PCA_PANEL.out.harmonized_inputs)
-            pcaInput = PREPARE_PCA_PFILE.out.pfile
-        }
-        PROJECT_GLOBAL_PCS(pcaInput, pcaFrequenciesCh, pcaLoadingsCh)
-        globalPcResults = PROJECT_GLOBAL_PCS.out.scores
-        CLASSIFY_ANCESTRY(
-            PROJECT_GLOBAL_PCS.out.scores,
-            pcaClassifierCh,
-            pcaClassifierMetadataCh,
-            Channel.value(file("${moduleDir}/../bin/apply_extra_trees.py"))
-        )
-        ancestryResults = CLASSIFY_ANCESTRY.out.assignments
-        if (directPfileEnabled) {
-            WITHIN_ANCESTRY_PCA_DIRECT(
-                qcPfile,
-                CLASSIFY_ANCESTRY.out.assignments,
-                Channel.value(file("${moduleDir}/../bin/run_within_ancestry_pca.sh"))
-            )
-            withinAncestryResults = WITHIN_ANCESTRY_PCA_DIRECT.out.groups
-        } else {
-            WITHIN_ANCESTRY_PCA(
-                qcPfile,
-                CLASSIFY_ANCESTRY.out.assignments,
-                Channel.value(file("${moduleDir}/../bin/run_within_ancestry_pca.sh"))
-            )
-            withinAncestryResults = WITHIN_ANCESTRY_PCA.out.groups
-        }
+        ANCESTRY_WORKFLOW(qcPfile, directPfileEnabled)
+        globalPcResults = ANCESTRY_WORKFLOW.out.global_pcs
+        projectionVariantResults = ANCESTRY_WORKFLOW.out.projection_variants
+        ancestryResults = ANCESTRY_WORKFLOW.out.ancestry_assignments
+        withinAncestryResults = ANCESTRY_WORKFLOW.out.within_ancestry
     }
 
     if (scoresEnabled) {
@@ -859,6 +877,7 @@ workflow PGS_WORKFLOW {
     qc_pfile = qcPfile
     combined_scores = combinedScoreResults
     global_pcs = globalPcResults
+    projection_variants = projectionVariantResults
     ancestry_assignments = ancestryResults
     within_ancestry = withinAncestryResults
     analysis_dataset = analysisDatasetResults
