@@ -253,6 +253,173 @@ process SUMMARY_QC_DIRECT {
     """
 }
 
+process PREPARE_PGS_INPUT {
+    tag params.cohort
+    label 'large'
+    publishDir "${params.outdir}/pgs_qc", mode: 'copy', pattern: '*.tsv'
+
+    input:
+    tuple path(pgen), path(pvar), path(psam)
+    path rsid_map
+    path common_markers
+
+    output:
+    tuple path('pgs_input.pgen'), path('pgs_input.pvar'), path('pgs_input.psam'), emit: pfile
+    path 'sample_missingness.tsv', emit: sample_missingness
+    path 'removed_samples.tsv', emit: removed_samples
+    path 'marker_validation.tsv', emit: marker_validation
+
+    script:
+    def inputPrefix = pgen.baseName
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
+    """
+    plink2 --pfile ${inputPrefix} --missing sample-only --out sample_qc \
+      --threads ${task.cpus} --memory ${memMb}
+    cp sample_qc.smiss sample_missingness.tsv
+    awk -v threshold='${params.sample_miss}' 'NR == 1 {for (i=1;i<=NF;i++) {if (\$i=="F_MISS") m=i; if (\$i=="IID") iid=i; if (\$i=="#FID" || \$i=="FID") fid=i} next} \$m > threshold {print (fid ? \$fid : 0), \$iid}' \
+      sample_qc.smiss > removed_samples.tsv
+
+    remove_args=()
+    [[ -s removed_samples.tsv ]] && remove_args=(--remove removed_samples.tsv)
+    extract_args=()
+    [[ -s ${common_markers} ]] && extract_args=(--extract ${common_markers})
+    plink2 --pfile ${inputPrefix} "\${remove_args[@]}" "\${extract_args[@]}" \
+      --maf ${params.maf} --make-pgen --out coordinate_qc \
+      --threads ${task.cpus} --memory ${memMb}
+
+    printf 'metric\tvalue\n' > marker_validation.tsv
+    observed=\$(awk '!/^#/ {n++} END {print n+0}' coordinate_qc.pvar)
+    printf 'observed_after_maf\t%s\n' "\$observed" >> marker_validation.tsv
+    if [[ -s ${common_markers} ]]; then
+      expected=\$(awk 'NF {n++} END {print n+0}' ${common_markers})
+      printf 'expected_common_markers\t%s\n' "\$expected" >> marker_validation.tsv
+      awk '!/^#/ {print \$3}' coordinate_qc.pvar | LC_ALL=C sort -u > observed.ids
+      awk 'NF {print \$1}' ${common_markers} | LC_ALL=C sort -u > expected.ids
+      if ! cmp -s observed.ids expected.ids; then
+        comm -23 expected.ids observed.ids > markers_removed_by_scoring_qc.txt
+        printf 'status\tfailed\n' >> marker_validation.tsv
+        echo 'Common-marker contract failed: scoring QC changed the frozen marker set' >&2
+        exit 1
+      fi
+      printf 'status\tpassed\n' >> marker_validation.tsv
+    else
+      printf 'status\tnot_harmonized\n' >> marker_validation.tsv
+    fi
+
+    awk 'NF >= 2 {print \$2}' ${rsid_map} > mapped_coordinate_ids.txt
+    plink2 --pfile coordinate_qc \
+      --extract mapped_coordinate_ids.txt \
+      --update-name ${rsid_map} 2 1 \
+      --make-pgen --out pgs_input \
+      --threads ${task.cpus} --memory ${memMb}
+    """
+}
+
+process PREPARE_PGS_INPUT_DIRECT {
+    tag params.cohort
+    label 'large'
+    publishDir "${params.outdir}/pgs_qc", mode: 'copy', pattern: '*.tsv'
+
+    input:
+    tuple val(pgen), val(pvar), val(psam)
+    path rsid_map
+    path common_markers
+
+    output:
+    tuple path('pgs_input.pgen'), path('pgs_input.pvar'), path('pgs_input.psam'), emit: pfile
+    path 'sample_missingness.tsv', emit: sample_missingness
+    path 'removed_samples.tsv', emit: removed_samples
+    path 'marker_validation.tsv', emit: marker_validation
+
+    script:
+    def inputPrefix = pgen.toString().replaceFirst(/[.]pgen$/, '')
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
+    """
+    test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
+    plink2 --pfile '${inputPrefix}' --missing sample-only --out sample_qc \
+      --threads ${task.cpus} --memory ${memMb}
+    cp sample_qc.smiss sample_missingness.tsv
+    awk -v threshold='${params.sample_miss}' 'NR == 1 {for (i=1;i<=NF;i++) {if (\$i=="F_MISS") m=i; if (\$i=="IID") iid=i; if (\$i=="#FID" || \$i=="FID") fid=i} next} \$m > threshold {print (fid ? \$fid : 0), \$iid}' \
+      sample_qc.smiss > removed_samples.tsv
+    remove_args=()
+    [[ -s removed_samples.tsv ]] && remove_args=(--remove removed_samples.tsv)
+    extract_args=()
+    [[ -s ${common_markers} ]] && extract_args=(--extract ${common_markers})
+    plink2 --pfile '${inputPrefix}' "\${remove_args[@]}" "\${extract_args[@]}" \
+      --maf ${params.maf} --make-pgen --out coordinate_qc \
+      --threads ${task.cpus} --memory ${memMb}
+    printf 'metric\tvalue\n' > marker_validation.tsv
+    observed=\$(awk '!/^#/ {n++} END {print n+0}' coordinate_qc.pvar)
+    printf 'observed_after_maf\t%s\n' "\$observed" >> marker_validation.tsv
+    if [[ -s ${common_markers} ]]; then
+      expected=\$(awk 'NF {n++} END {print n+0}' ${common_markers})
+      printf 'expected_common_markers\t%s\n' "\$expected" >> marker_validation.tsv
+      awk '!/^#/ {print \$3}' coordinate_qc.pvar | LC_ALL=C sort -u > observed.ids
+      awk 'NF {print \$1}' ${common_markers} | LC_ALL=C sort -u > expected.ids
+      if ! cmp -s observed.ids expected.ids; then
+        comm -23 expected.ids observed.ids > markers_removed_by_scoring_qc.txt
+        printf 'status\tfailed\n' >> marker_validation.tsv
+        echo 'Common-marker contract failed: scoring QC changed the frozen marker set' >&2
+        exit 1
+      fi
+      printf 'status\tpassed\n' >> marker_validation.tsv
+    else
+      printf 'status\tnot_harmonized\n' >> marker_validation.tsv
+    fi
+    awk 'NF >= 2 {print \$2}' ${rsid_map} > mapped_coordinate_ids.txt
+    plink2 --pfile coordinate_qc --extract mapped_coordinate_ids.txt \
+      --update-name ${rsid_map} 2 1 --make-pgen --out pgs_input \
+      --threads ${task.cpus} --memory ${memMb}
+    """
+}
+
+process PREPARE_ANCESTRY_BASE_DIRECT {
+    tag params.cohort
+    label 'large'
+    publishDir "${params.outdir}/pca_qc", mode: 'copy', pattern: '*.tsv'
+
+    input:
+    tuple val(pgen), val(pvar), val(psam)
+    path common_markers
+
+    output:
+    tuple path('ancestry_base.pgen'), path('ancestry_base.pvar'), path('ancestry_base.psam'), emit: pfile
+    path 'sample_missingness.tsv', emit: sample_missingness
+    path 'removed_samples.tsv', emit: removed_samples
+    path 'common_marker_validation.tsv', emit: marker_validation
+
+    script:
+    def inputPrefix = pgen.toString().replaceFirst(/[.]pgen$/, '')
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
+    """
+    test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
+    plink2 --pfile '${inputPrefix}' --missing sample-only --out sample_qc \
+      --threads ${task.cpus} --memory ${memMb}
+    cp sample_qc.smiss sample_missingness.tsv
+    awk -v threshold='${params.sample_miss}' 'NR == 1 {for (i=1;i<=NF;i++) {if (\$i=="F_MISS") m=i; if (\$i=="IID") iid=i; if (\$i=="#FID" || \$i=="FID") fid=i} next} \$m > threshold {print (fid ? \$fid : 0), \$iid}' \
+      sample_qc.smiss > removed_samples.tsv
+    remove_args=()
+    [[ -s removed_samples.tsv ]] && remove_args=(--remove removed_samples.tsv)
+    extract_args=()
+    [[ -s ${common_markers} ]] && extract_args=(--extract ${common_markers})
+    plink2 --pfile '${inputPrefix}' "\${remove_args[@]}" "\${extract_args[@]}" \
+      --make-pgen --out ancestry_base --threads ${task.cpus} --memory ${memMb}
+    printf 'metric\tvalue\n' > common_marker_validation.tsv
+    observed=\$(awk '!/^#/ {n++} END {print n+0}' ancestry_base.pvar)
+    printf 'observed_markers\t%s\n' "\$observed" >> common_marker_validation.tsv
+    if [[ -s ${common_markers} ]]; then
+      expected=\$(awk 'NF {n++} END {print n+0}' ${common_markers})
+      printf 'expected_common_markers\t%s\n' "\$expected" >> common_marker_validation.tsv
+      awk '!/^#/ {print \$3}' ancestry_base.pvar | LC_ALL=C sort -u > observed.ids
+      awk 'NF {print \$1}' ${common_markers} | LC_ALL=C sort -u > expected.ids
+      cmp -s observed.ids expected.ids || { echo 'Common-marker contract failed for ancestry' >&2; exit 1; }
+      printf 'status\tpassed\n' >> common_marker_validation.tsv
+    else
+      printf 'status\tnot_harmonized\n' >> common_marker_validation.tsv
+    fi
+    """
+}
+
 process SCORE_TRAIT {
     tag trait
     label 'scoring'
@@ -738,6 +905,58 @@ workflow ANCESTRY_WORKFLOW {
     within_ancestry = withinAncestryResults
 }
 
+workflow SCORING_WORKFLOW {
+    take:
+    inputPfile
+    directPfileEnabled
+    rsidMap
+    commonMarkers
+
+    main:
+    if (!params.score_sheet) {
+        error '--score_sheet is required for scoring'
+    }
+    if (directPfileEnabled) {
+        PREPARE_PGS_INPUT_DIRECT(inputPfile, rsidMap, commonMarkers)
+        scoringPfile = PREPARE_PGS_INPUT_DIRECT.out.pfile
+        sampleMissingness = PREPARE_PGS_INPUT_DIRECT.out.sample_missingness
+        removedSamples = PREPARE_PGS_INPUT_DIRECT.out.removed_samples
+        markerValidation = PREPARE_PGS_INPUT_DIRECT.out.marker_validation
+    } else {
+        PREPARE_PGS_INPUT(inputPfile, rsidMap, commonMarkers)
+        scoringPfile = PREPARE_PGS_INPUT.out.pfile
+        sampleMissingness = PREPARE_PGS_INPUT.out.sample_missingness
+        removedSamples = PREPARE_PGS_INPUT.out.removed_samples
+        markerValidation = PREPARE_PGS_INPUT.out.marker_validation
+    }
+    weights = Channel.fromPath(params.score_sheet, checkIfExists: true)
+        .splitCsv(header: true, sep: '\t', strip: true)
+        .map { row ->
+            if (!row.trait || !row.weights || !row.id_col || !row.allele_col || !row.effect_col) {
+                error 'Score sheet requires trait, weights, id_col, allele_col, and effect_col columns'
+            }
+            tuple(row.trait.toString(), file(row.weights.toString(), checkIfExists: true),
+                row.id_col.toString().toInteger(), row.allele_col.toString().toInteger(),
+                row.effect_col.toString().toInteger())
+        }
+    scoreInputs = weights.combine(scoringPfile).map { trait, weight, idCol, alleleCol, effectCol, pgen, pvar, psam ->
+        tuple(trait, weight, idCol, alleleCol, effectCol, pgen, pvar, psam)
+    }
+    SCORE_TRAIT(scoreInputs, Channel.value(file("${moduleDir}/../bin/summarize_score.awk")))
+    scoreFiles = SCORE_TRAIT.out.scored.map { trait, score, qc -> score }.collect()
+    scoreQcFiles = SCORE_TRAIT.out.scored.map { trait, score, qc -> qc }.collect()
+    COLLATE_SCORE_RESULTS(scoreFiles, scoreQcFiles,
+        Channel.value(file("${moduleDir}/../bin/collate_scores.sh")))
+
+    emit:
+    scoring_pfile = scoringPfile
+    combined_scores = COLLATE_SCORE_RESULTS.out.combined
+    score_qc = COLLATE_SCORE_RESULTS.out.qc
+    sample_missingness = sampleMissingness
+    removed_samples = removedSamples
+    marker_validation = markerValidation
+}
+
 workflow PGS_WORKFLOW {
     main:
     def skipRsid = flagEnabled(params.skip_rsid_annotation)
@@ -753,6 +972,10 @@ workflow PGS_WORKFLOW {
     def combinedScoreResults = Channel.empty()
     def analysisDatasetResults = Channel.empty()
     def analysisDictionaryResults = Channel.empty()
+    def scoringPfile
+    def scoringDirect = directPfileEnabled
+    def ancestryPfile
+    def ancestryDirect = directPfileEnabled
 
     if (!params.input_pfile && (!params.vcfs || (!params.rsid_maps && !skipRsid))) {
         error '--vcfs is required, and --rsid_maps is required unless --skip_rsid_annotation is true; alternatively provide --input_pfile with a QCed PLINK 2 prefix.'
@@ -815,8 +1038,34 @@ workflow PGS_WORKFLOW {
         }
     }
 
+    scoringPfile = qcPfile
+    ancestryPfile = qcPfile
+    if (params.input_pfile && scoresEnabled) {
+        if (!params.rsid_map) {
+            error '--rsid_map is required when scoring from --input_pfile'
+        }
+        scoringRsidMap = Channel.value(file(params.rsid_map, checkIfExists: true))
+        scoringCommonMarkers = Channel.value(params.common_markers ?
+            file(params.common_markers, checkIfExists: true) : file("${moduleDir}/../resources/empty_markers.txt"))
+        if (directPfileEnabled) {
+            PREPARE_PGS_INPUT_DIRECT(qcPfile, scoringRsidMap, scoringCommonMarkers)
+            scoringPfile = PREPARE_PGS_INPUT_DIRECT.out.pfile
+        } else {
+            PREPARE_PGS_INPUT(qcPfile, scoringRsidMap, scoringCommonMarkers)
+            scoringPfile = PREPARE_PGS_INPUT.out.pfile
+        }
+        scoringDirect = false
+    }
+    if (params.input_pfile && pcaEnabled) {
+        ancestryCommonMarkers = Channel.value(params.common_markers ?
+            file(params.common_markers, checkIfExists: true) : file("${moduleDir}/../resources/empty_markers.txt"))
+        PREPARE_ANCESTRY_BASE_DIRECT(qcPfile, ancestryCommonMarkers)
+        ancestryPfile = PREPARE_ANCESTRY_BASE_DIRECT.out.pfile
+        ancestryDirect = false
+    }
+
     if (pcaEnabled) {
-        ANCESTRY_WORKFLOW(qcPfile, directPfileEnabled)
+        ANCESTRY_WORKFLOW(ancestryPfile, ancestryDirect)
         globalPcResults = ANCESTRY_WORKFLOW.out.global_pcs
         projectionVariantResults = ANCESTRY_WORKFLOW.out.projection_variants
         ancestryResults = ANCESTRY_WORKFLOW.out.ancestry_assignments
@@ -841,10 +1090,10 @@ workflow PGS_WORKFLOW {
                     row.effect_col.toString().toInteger()
                 )
             }
-        scoreInputs = weights.combine(qcPfile).map { trait, weight, idCol, alleleCol, effectCol, pgen, pvar, psam ->
+        scoreInputs = weights.combine(scoringPfile).map { trait, weight, idCol, alleleCol, effectCol, pgen, pvar, psam ->
             tuple(trait, weight, idCol, alleleCol, effectCol, pgen, pvar, psam)
         }
-        if (directPfileEnabled) {
+        if (scoringDirect) {
             SCORE_TRAIT_DIRECT(scoreInputs, Channel.value(file("${moduleDir}/../bin/summarize_score.awk")))
             scoredResults = SCORE_TRAIT_DIRECT.out.scored
         } else {

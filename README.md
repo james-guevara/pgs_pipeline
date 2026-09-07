@@ -4,6 +4,24 @@ Containerized Nextflow pipeline for VCF filtering, rsID annotation, genome-wide
 QC, polygenic scoring, and a specified fixed-reference PCA interface. It can
 run unchanged with local Docker or AWS Batch.
 
+## Standalone entry points
+
+- `main.nf`: composed legacy-compatible PGS/PCA launcher.
+- `scoring.nf`: one existing base PGEN to PGS QC, rsID mapping, and scoring.
+- `ancestry.nf`: one existing base PGEN to fixed-reference ancestry projection
+  and within-ancestry PCA.
+- `harmonize_cohorts.nf`: optional, standalone common-marker release for two or
+  more genotype filesets.
+- `joint_pca_input.nf`: optional PCA-only hard-call merge across harmonized
+  filesets; it is not used for dosage-preserving PGS.
+
+`scoring.nf` applies sample missingness <= 0.05 and MAF >= 0.01 by default,
+then maps the base `CHROM:POS:REF:ALT` IDs to rsIDs for SBayesRC-compatible
+weights. With `--common_markers`, it reapplies MAF as a guard and fails if the
+frozen common marker set changes. PGS weight presence and effect-allele
+alignment remain score-specific operations downstream of genotype-fileset
+harmonization.
+
 ## Workflow
 
 1. Run PLINK2 filtering, rsID annotation, and MAF filtering independently for each chromosome.

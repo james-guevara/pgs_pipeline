@@ -1,0 +1,3 @@
+dataset_id	pgen_prefix	priority
+cohort_wgs	/shared/cohort_wgs/base	1
+cohort_imputed	/shared/cohort_imputed/base	2

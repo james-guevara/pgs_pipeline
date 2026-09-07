@@ -17,8 +17,10 @@ params.within_ancestry_ld_r2 = 0.2
 params.python_container = 'python:3.11.16-bookworm'
 params.fsx_direct = false
 params.direct_inputs = false
+params.common_markers = null
+params.sample_miss = 0.05
 
-include { ANCESTRY_WORKFLOW } from './workflows/pgs'
+include { ANCESTRY_WORKFLOW; PREPARE_ANCESTRY_BASE_DIRECT } from './workflows/pgs'
 
 workflow {
     if (!params.input_pfile) {
@@ -42,5 +44,8 @@ workflow {
         ))
     }
 
-    ANCESTRY_WORKFLOW(qcPfile, directPfileEnabled)
+    commonMarkers = Channel.value(params.common_markers ?
+        file(params.common_markers, checkIfExists: true) : file("${projectDir}/resources/empty_markers.txt"))
+    PREPARE_ANCESTRY_BASE_DIRECT(qcPfile, commonMarkers)
+    ANCESTRY_WORKFLOW(PREPARE_ANCESTRY_BASE_DIRECT.out.pfile, false)
 }

@@ -37,7 +37,7 @@ class NextflowStructureTest(unittest.TestCase):
         source = (ROOT / "workflows" / "pgs.nf").read_text()
         self.assertIn("workflow PGS_WORKFLOW", source)
         self.assertIn("workflow ANCESTRY_WORKFLOW", source)
-        self.assertIn("ANCESTRY_WORKFLOW(qcPfile, directPfileEnabled)", source)
+        self.assertIn("ANCESTRY_WORKFLOW(ancestryPfile, ancestryDirect)", source)
         self.assertNotIn("${projectDir}/bin/", source)
         self.assertIn("${moduleDir}/../bin/", source)
         for name in (
@@ -54,9 +54,10 @@ class NextflowStructureTest(unittest.TestCase):
 
     def test_detachable_ancestry_wrapper_uses_named_workflow(self):
         source = (ROOT / "ancestry.nf").read_text()
-        self.assertIn("include { ANCESTRY_WORKFLOW }", source)
+        self.assertIn("ANCESTRY_WORKFLOW; PREPARE_ANCESTRY_BASE_DIRECT", source)
         self.assertIn("--input_pfile is required", source)
-        self.assertIn("ANCESTRY_WORKFLOW(qcPfile, directPfileEnabled)", source)
+        self.assertIn("ANCESTRY_WORKFLOW(PREPARE_ANCESTRY_BASE_DIRECT.out.pfile, false)", source)
+        self.assertIn("params.common_markers", source)
 
         workflow = (ROOT / "workflows" / "pgs.nf").read_text()
         for name in (
@@ -66,6 +67,26 @@ class NextflowStructureTest(unittest.TestCase):
             "within_ancestry",
         ):
             self.assertIn(f"{name} =", workflow)
+
+    def test_detachable_scoring_wrapper_restores_pgs_qc(self):
+        source = (ROOT / "scoring.nf").read_text()
+        self.assertIn("include { SCORING_WORKFLOW }", source)
+        self.assertIn("--input_pfile, --rsid_map, and --score_sheet are required", source)
+        workflow = (ROOT / "workflows" / "pgs.nf").read_text()
+        self.assertIn("workflow SCORING_WORKFLOW", workflow)
+        self.assertIn("--maf ${params.maf}", workflow)
+        self.assertIn("F_MISS", workflow)
+        self.assertIn("Common-marker contract failed", workflow)
+
+    def test_multi_fileset_preparation_entrypoints_exist(self):
+        harmonize = (ROOT / "harmonize_cohorts.nf").read_text()
+        joint = (ROOT / "joint_pca_input.nf").read_text()
+        self.assertIn("--dataset_manifest is required", harmonize)
+        self.assertIn("common_markers.txt", harmonize)
+        self.assertIn("MAKE_MATCHED_BED", joint)
+        self.assertIn("MERGE_PCA_BEDS", joint)
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        self.assertIn("COPY --from=plink1", dockerfile)
 
 
 if __name__ == "__main__":
