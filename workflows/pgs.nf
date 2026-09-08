@@ -260,6 +260,7 @@ process PREPARE_SCORE_PFILE {
 
     input:
     tuple path(pgen), path(pvar), path(psam)
+    path rsid_map
 
     output:
     tuple path('score_input.pgen'), path('score_input.pvar'), path('score_input.psam'), emit: pfile
@@ -270,11 +271,20 @@ process PREPARE_SCORE_PFILE {
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
     before=${'$'}(awk '!/^#/ {n++} END {print n+0}' ${pvar})
-    plink2 --pfile '${prefix}' --maf ${params.maf} --make-pgen \
-      --out score_input --threads ${task.cpus} --memory ${memMb}
+    awk 'NF >= 2 && ${'$'}1 !~ /^#/ {print ${'$'}1}' '${rsid_map}' > mapped_coordinate_ids.txt
+    if [ -s mapped_coordinate_ids.txt ]; then
+      plink2 --pfile '${prefix}' --extract mapped_coordinate_ids.txt \
+        --update-name '${rsid_map}' 1 2 --maf ${params.maf} --make-pgen \
+        --out score_input --threads ${task.cpus} --memory ${memMb}
+      mapping=applied
+    else
+      plink2 --pfile '${prefix}' --maf ${params.maf} --make-pgen \
+        --out score_input --threads ${task.cpus} --memory ${memMb}
+      mapping=not_requested
+    fi
     after=${'$'}(awk '!/^#/ {n++} END {print n+0}' score_input.pvar)
-    printf 'metric\tvalue\nmaf_threshold\t%s\nvariants_before\t%s\nvariants_after\t%s\n' \
-      '${params.maf}' "${'$'}before" "${'$'}after" > score_input_filter_summary.tsv
+    printf 'metric\tvalue\nrsid_mapping\t%s\nmaf_threshold\t%s\nvariants_before\t%s\nvariants_after\t%s\n' \
+      "${'$'}mapping" '${params.maf}' "${'$'}before" "${'$'}after" > score_input_filter_summary.tsv
     """
 }
 
@@ -285,6 +295,7 @@ process PREPARE_SCORE_PFILE_DIRECT {
 
     input:
     tuple val(pgen), val(pvar), val(psam)
+    path rsid_map
 
     output:
     tuple path('score_input.pgen'), path('score_input.pvar'), path('score_input.psam'), emit: pfile
@@ -296,11 +307,20 @@ process PREPARE_SCORE_PFILE_DIRECT {
     """
     test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
     before=${'$'}(awk '!/^#/ {n++} END {print n+0}' '${pvar}')
-    plink2 --pfile '${prefix}' --maf ${params.maf} --make-pgen \
-      --out score_input --threads ${task.cpus} --memory ${memMb}
+    awk 'NF >= 2 && ${'$'}1 !~ /^#/ {print ${'$'}1}' '${rsid_map}' > mapped_coordinate_ids.txt
+    if [ -s mapped_coordinate_ids.txt ]; then
+      plink2 --pfile '${prefix}' --extract mapped_coordinate_ids.txt \
+        --update-name '${rsid_map}' 1 2 --maf ${params.maf} --make-pgen \
+        --out score_input --threads ${task.cpus} --memory ${memMb}
+      mapping=applied
+    else
+      plink2 --pfile '${prefix}' --maf ${params.maf} --make-pgen \
+        --out score_input --threads ${task.cpus} --memory ${memMb}
+      mapping=not_requested
+    fi
     after=${'$'}(awk '!/^#/ {n++} END {print n+0}' score_input.pvar)
-    printf 'metric\tvalue\nmaf_threshold\t%s\nvariants_before\t%s\nvariants_after\t%s\n' \
-      '${params.maf}' "${'$'}before" "${'$'}after" > score_input_filter_summary.tsv
+    printf 'metric\tvalue\nrsid_mapping\t%s\nmaf_threshold\t%s\nvariants_before\t%s\nvariants_after\t%s\n' \
+      "${'$'}mapping" '${params.maf}' "${'$'}before" "${'$'}after" > score_input_filter_summary.tsv
     """
 }
 
@@ -876,12 +896,16 @@ workflow PGS_WORKFLOW {
                     row.effect_col.toString().toInteger()
                 )
             }
+        scoreRsidMap = Channel.value(file(
+            params.score_rsid_map ?: "${projectDir}/resources/no_rsid_map.tsv",
+            checkIfExists: true
+        ))
         if (directPfileEnabled) {
-            PREPARE_SCORE_PFILE_DIRECT(qcPfile)
+            PREPARE_SCORE_PFILE_DIRECT(qcPfile, scoreRsidMap)
             scorePfile = PREPARE_SCORE_PFILE_DIRECT.out.pfile
             scoreInputSummaryResults = PREPARE_SCORE_PFILE_DIRECT.out.summary
         } else {
-            PREPARE_SCORE_PFILE(qcPfile)
+            PREPARE_SCORE_PFILE(qcPfile, scoreRsidMap)
             scorePfile = PREPARE_SCORE_PFILE.out.pfile
             scoreInputSummaryResults = PREPARE_SCORE_PFILE.out.summary
         }

@@ -229,6 +229,7 @@ Apptainer/Singularity systems, a site config may instead point
 | `variant_miss` | `0.05` | Variant missingness threshold |
 | `sample_miss` | `0.05` | Sample missingness threshold |
 | `run_scores` | `false` | Run PLINK2 scoring branch |
+| `score_rsid_map` | unset | Optional two-column coordinate-ID to rsID map applied only to the PGS scoring view |
 | `run_summary_qc` | `true` | Generate cohort-wide missingness, HWE, and frequency summaries; set false for repeated scoring-only runs |
 | `min_score_variant_match` | `0.50` | Fail a trait when fewer than this fraction of weight variants are scored |
 | `warn_score_variant_match` | `0.80` | Flag a trait QC row below this match fraction |

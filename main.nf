@@ -9,6 +9,7 @@ params.cohort = 'cohort'
 params.genome_build = 'GRCh38'
 params.outdir = 'results'
 params.score_sheet = null
+params.score_rsid_map = null
 params.run_scores = false
 params.run_summary_qc = true
 params.min_score_variant_match = 0.50

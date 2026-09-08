@@ -64,6 +64,8 @@ class NextflowStructureTest(unittest.TestCase):
         self.assertIn("--maf ${params.maf} --make-pgen", source)
         self.assertIn("weights.combine(scorePfile)", source)
         self.assertNotIn("weights.combine(qcPfile)", source)
+        self.assertIn("params.score_rsid_map", source)
+        self.assertIn("--update-name '${rsid_map}' 1 2", source)
 
 
 if __name__ == "__main__":
