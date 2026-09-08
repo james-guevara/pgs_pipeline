@@ -1,0 +1,3 @@
+source	pgen_prefix
+WGS	/shared/cohorts/wgs/base
+Imputed	/shared/cohorts/imputed/base

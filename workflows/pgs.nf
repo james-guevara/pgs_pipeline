@@ -253,6 +253,57 @@ process SUMMARY_QC_DIRECT {
     """
 }
 
+process PREPARE_SCORE_PFILE {
+    tag params.cohort
+    label 'large'
+    publishDir "${params.outdir}/04_score_input", mode: 'copy'
+
+    input:
+    tuple path(pgen), path(pvar), path(psam)
+
+    output:
+    tuple path('score_input.pgen'), path('score_input.pvar'), path('score_input.psam'), emit: pfile
+    path 'score_input_filter_summary.tsv', emit: summary
+
+    script:
+    def prefix = pgen.baseName
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
+    """
+    before=${'$'}(awk '!/^#/ {n++} END {print n+0}' ${pvar})
+    plink2 --pfile '${prefix}' --maf ${params.maf} --make-pgen \
+      --out score_input --threads ${task.cpus} --memory ${memMb}
+    after=${'$'}(awk '!/^#/ {n++} END {print n+0}' score_input.pvar)
+    printf 'metric\tvalue\nmaf_threshold\t%s\nvariants_before\t%s\nvariants_after\t%s\n' \
+      '${params.maf}' "${'$'}before" "${'$'}after" > score_input_filter_summary.tsv
+    """
+}
+
+process PREPARE_SCORE_PFILE_DIRECT {
+    tag params.cohort
+    label 'large'
+    publishDir "${params.outdir}/04_score_input", mode: 'copy'
+
+    input:
+    tuple val(pgen), val(pvar), val(psam)
+
+    output:
+    tuple path('score_input.pgen'), path('score_input.pvar'), path('score_input.psam'), emit: pfile
+    path 'score_input_filter_summary.tsv', emit: summary
+
+    script:
+    def prefix = pgen.toString().replaceFirst(/[.]pgen$/, '')
+    def memMb = Math.max(1000, task.memory.toMega() - 2000)
+    """
+    test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
+    before=${'$'}(awk '!/^#/ {n++} END {print n+0}' '${pvar}')
+    plink2 --pfile '${prefix}' --maf ${params.maf} --make-pgen \
+      --out score_input --threads ${task.cpus} --memory ${memMb}
+    after=${'$'}(awk '!/^#/ {n++} END {print n+0}' score_input.pvar)
+    printf 'metric\tvalue\nmaf_threshold\t%s\nvariants_before\t%s\nvariants_after\t%s\n' \
+      '${params.maf}' "${'$'}before" "${'$'}after" > score_input_filter_summary.tsv
+    """
+}
+
 process SCORE_TRAIT {
     tag trait
     label 'scoring'
@@ -659,6 +710,8 @@ workflow PGS_WORKFLOW {
     def ancestryResults = Channel.empty()
     def withinAncestryResults = Channel.empty()
     def combinedScoreResults = Channel.empty()
+    def scoreInputResults = Channel.empty()
+    def scoreInputSummaryResults = Channel.empty()
     def analysisDatasetResults = Channel.empty()
     def analysisDictionaryResults = Channel.empty()
 
@@ -823,16 +876,21 @@ workflow PGS_WORKFLOW {
                     row.effect_col.toString().toInteger()
                 )
             }
-        scoreInputs = weights.combine(qcPfile).map { trait, weight, idCol, alleleCol, effectCol, pgen, pvar, psam ->
+        if (directPfileEnabled) {
+            PREPARE_SCORE_PFILE_DIRECT(qcPfile)
+            scorePfile = PREPARE_SCORE_PFILE_DIRECT.out.pfile
+            scoreInputSummaryResults = PREPARE_SCORE_PFILE_DIRECT.out.summary
+        } else {
+            PREPARE_SCORE_PFILE(qcPfile)
+            scorePfile = PREPARE_SCORE_PFILE.out.pfile
+            scoreInputSummaryResults = PREPARE_SCORE_PFILE.out.summary
+        }
+        scoreInputResults = scorePfile
+        scoreInputs = weights.combine(scorePfile).map { trait, weight, idCol, alleleCol, effectCol, pgen, pvar, psam ->
             tuple(trait, weight, idCol, alleleCol, effectCol, pgen, pvar, psam)
         }
-        if (directPfileEnabled) {
-            SCORE_TRAIT_DIRECT(scoreInputs, Channel.value(file("${projectDir}/bin/summarize_score.awk")))
-            scoredResults = SCORE_TRAIT_DIRECT.out.scored
-        } else {
-            SCORE_TRAIT(scoreInputs, Channel.value(file("${projectDir}/bin/summarize_score.awk")))
-            scoredResults = SCORE_TRAIT.out.scored
-        }
+        SCORE_TRAIT(scoreInputs, Channel.value(file("${projectDir}/bin/summarize_score.awk")))
+        scoredResults = SCORE_TRAIT.out.scored
         scoreFiles = scoredResults.map { trait, score, qc -> score }.collect()
         scoreQcFiles = scoredResults.map { trait, score, qc -> qc }.collect()
         COLLATE_SCORE_RESULTS(
@@ -857,6 +915,8 @@ workflow PGS_WORKFLOW {
 
     emit:
     qc_pfile = qcPfile
+    score_pfile = scoreInputResults
+    score_input_summary = scoreInputSummaryResults
     combined_scores = combinedScoreResults
     global_pcs = globalPcResults
     ancestry_assignments = ancestryResults

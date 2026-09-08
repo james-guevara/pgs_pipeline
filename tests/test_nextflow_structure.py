@@ -9,6 +9,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @unittest.skipUnless(shutil.which("nextflow"), "Nextflow is not installed")
 class NextflowStructureTest(unittest.TestCase):
+    def test_harmonization_entrypoint_compiles_and_exposes_compact_contract(self):
+        source = (ROOT / "workflows" / "harmonization.nf").read_text()
+        entrypoint = (ROOT / "harmonize.nf").read_text()
+        for output in ("harmonization_summary.json", "marker_qc.parquet", "sample_qc.tsv"):
+            self.assertIn(output, source)
+        self.assertIn("workflow PGEN_HARMONIZATION_WORKFLOW", source)
+        self.assertIn("--input_manifest is required", entrypoint)
+
     def test_standalone_wrapper_compiles_with_reusable_workflow(self):
         result = subprocess.run(
             [
@@ -38,6 +46,8 @@ class NextflowStructureTest(unittest.TestCase):
         self.assertIn("workflow PGS_WORKFLOW", source)
         for name in (
             "qc_pfile",
+            "score_pfile",
+            "score_input_summary",
             "combined_scores",
             "global_pcs",
             "ancestry_assignments",
@@ -46,6 +56,14 @@ class NextflowStructureTest(unittest.TestCase):
             "analysis_dictionary",
         ):
             self.assertIn(f"{name} =", source)
+
+    def test_scoring_always_uses_a_dedicated_maf_filtered_view(self):
+        source = (ROOT / "workflows" / "pgs.nf").read_text()
+        self.assertIn("process PREPARE_SCORE_PFILE", source)
+        self.assertIn("process PREPARE_SCORE_PFILE_DIRECT", source)
+        self.assertIn("--maf ${params.maf} --make-pgen", source)
+        self.assertIn("weights.combine(scorePfile)", source)
+        self.assertNotIn("weights.combine(qcPfile)", source)
 
 
 if __name__ == "__main__":

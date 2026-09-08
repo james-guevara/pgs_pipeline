@@ -1,0 +1,34 @@
+name: Build harmonizer container
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, refactor/reusable-subworkflows]
+    paths:
+      - docker/harmonizer/Dockerfile
+      - .github/workflows/harmonizer-container.yml
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/harmonizer/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/james-guevara/pgs-pgen-harmonizer:sha-${{ github.sha }}
+            ghcr.io/james-guevara/pgs-pgen-harmonizer:edge

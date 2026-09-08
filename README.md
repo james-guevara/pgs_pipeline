@@ -190,6 +190,28 @@ not put access keys in this repository; use IAM roles or the AWS credential
 chain. The AWS profile follows Nextflow's documented model of a Batch queue, S3
 work directory, and AWS CLI in the task image ([Nextflow documentation](https://training.nextflow.io/2.5.0/archive/basic_training/executors/)).
 
+## Optional sample-axis harmonization
+
+`harmonize.nf` combines two or more PGEN filesets with disjoint samples when an
+analysis requires the same exact marker set across sources. Its two-column TSV
+input has `source` and `pgen_prefix` fields; see
+`examples/harmonization_inputs.tsv`. Prefixes must be visible to the worker
+container and point to matching-build `.pgen`, `.pvar`, and `.psam` files.
+
+```sh
+nextflow run harmonize.nf \
+  --input_manifest examples/harmonization_inputs.tsv \
+  --harmonization_container ghcr.io/james-guevara/pgs-pgen-harmonizer@sha256:<digest> \
+  --outdir results/harmonized
+```
+
+The stage preserves dosage and emits exactly four scientific products: a
+`harmonized` PGEN fileset, `harmonization_summary.json`, `marker_qc.parquet`,
+and `sample_qc.tsv`. It does not apply a scientific MAF threshold. Pass the
+harmonized prefix to the ordinary workflow with `--input_pfile`; the PGS branch
+then creates a scoring-specific view using `--maf` while PCA independently uses
+its fixed reference-marker policy.
+
 ## Important parameters
 
 | Parameter | Default | Meaning |
@@ -200,7 +222,7 @@ work directory, and AWS CLI in the task image ([Nextflow documentation](https://
 | `genome_build` | `GRCh38` | Cohort genome build; must match the PCA reference |
 | `mac` | `10` | Minimum allele count |
 | `geno` | `0.05` | Initial genotype missingness threshold |
-| `maf` | `0.01` | Initial minor allele frequency threshold |
+| `maf` | `0.01` | PGS scoring-view MAF threshold; applied to VCF-derived and supplied PGEN inputs |
 | `variant_miss` | `0.05` | Variant missingness threshold |
 | `sample_miss` | `0.05` | Sample missingness threshold |
 | `run_scores` | `false` | Run PLINK2 scoring branch |
