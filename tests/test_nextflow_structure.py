@@ -67,6 +67,8 @@ class NextflowStructureTest(unittest.TestCase):
         self.assertIn("params.score_rsid_map", source)
         self.assertIn("--update-name '${rsid_map}' 2 1", source)
         self.assertNotIn("--update-name '${rsid_map}' 1 2", source)
+        self.assertIn("{print ${'$'}2}' '${rsid_map}' > mapped_rsid_ids.txt", source)
+        self.assertNotIn("mapped_coordinate_ids.txt", source)
 
 
 if __name__ == "__main__":

@@ -271,9 +271,9 @@ process PREPARE_SCORE_PFILE {
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
     before=${'$'}(awk '!/^#/ {n++} END {print n+0}' ${pvar})
-    awk 'NF >= 2 && ${'$'}1 !~ /^#/ {print ${'$'}1}' '${rsid_map}' > mapped_coordinate_ids.txt
-    if [ -s mapped_coordinate_ids.txt ]; then
-      plink2 --pfile '${prefix}' --extract mapped_coordinate_ids.txt \
+    awk 'NF >= 2 && ${'$'}1 !~ /^#/ {print ${'$'}2}' '${rsid_map}' > mapped_rsid_ids.txt
+    if [ -s mapped_rsid_ids.txt ]; then
+      plink2 --pfile '${prefix}' --extract mapped_rsid_ids.txt \
         --update-name '${rsid_map}' 2 1 --maf ${params.maf} --make-pgen \
         --out score_input --threads ${task.cpus} --memory ${memMb}
       mapping=applied
@@ -307,9 +307,9 @@ process PREPARE_SCORE_PFILE_DIRECT {
     """
     test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
     before=${'$'}(awk '!/^#/ {n++} END {print n+0}' '${pvar}')
-    awk 'NF >= 2 && ${'$'}1 !~ /^#/ {print ${'$'}1}' '${rsid_map}' > mapped_coordinate_ids.txt
-    if [ -s mapped_coordinate_ids.txt ]; then
-      plink2 --pfile '${prefix}' --extract mapped_coordinate_ids.txt \
+    awk 'NF >= 2 && ${'$'}1 !~ /^#/ {print ${'$'}2}' '${rsid_map}' > mapped_rsid_ids.txt
+    if [ -s mapped_rsid_ids.txt ]; then
+      plink2 --pfile '${prefix}' --extract mapped_rsid_ids.txt \
         --update-name '${rsid_map}' 2 1 --maf ${params.maf} --make-pgen \
         --out score_input --threads ${task.cpus} --memory ${memMb}
       mapping=applied
