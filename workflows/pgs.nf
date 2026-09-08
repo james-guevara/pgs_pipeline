@@ -274,7 +274,7 @@ process PREPARE_SCORE_PFILE {
     awk 'NF >= 2 && ${'$'}1 !~ /^#/ {print ${'$'}1}' '${rsid_map}' > mapped_coordinate_ids.txt
     if [ -s mapped_coordinate_ids.txt ]; then
       plink2 --pfile '${prefix}' --extract mapped_coordinate_ids.txt \
-        --update-name '${rsid_map}' 1 2 --maf ${params.maf} --make-pgen \
+        --update-name '${rsid_map}' 2 1 --maf ${params.maf} --make-pgen \
         --out score_input --threads ${task.cpus} --memory ${memMb}
       mapping=applied
     else
@@ -310,7 +310,7 @@ process PREPARE_SCORE_PFILE_DIRECT {
     awk 'NF >= 2 && ${'$'}1 !~ /^#/ {print ${'$'}1}' '${rsid_map}' > mapped_coordinate_ids.txt
     if [ -s mapped_coordinate_ids.txt ]; then
       plink2 --pfile '${prefix}' --extract mapped_coordinate_ids.txt \
-        --update-name '${rsid_map}' 1 2 --maf ${params.maf} --make-pgen \
+        --update-name '${rsid_map}' 2 1 --maf ${params.maf} --make-pgen \
         --out score_input --threads ${task.cpus} --memory ${memMb}
       mapping=applied
     else

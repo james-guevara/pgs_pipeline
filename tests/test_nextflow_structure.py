@@ -65,7 +65,8 @@ class NextflowStructureTest(unittest.TestCase):
         self.assertIn("weights.combine(scorePfile)", source)
         self.assertNotIn("weights.combine(qcPfile)", source)
         self.assertIn("params.score_rsid_map", source)
-        self.assertIn("--update-name '${rsid_map}' 1 2", source)
+        self.assertIn("--update-name '${rsid_map}' 2 1", source)
+        self.assertNotIn("--update-name '${rsid_map}' 1 2", source)
 
 
 if __name__ == "__main__":
