@@ -201,7 +201,6 @@ container and point to matching-build `.pgen`, `.pvar`, and `.psam` files.
 ```sh
 nextflow run harmonize.nf \
   --input_manifest examples/harmonization_inputs.tsv \
-  --harmonization_container ghcr.io/james-guevara/pgs-pgen-harmonizer@sha256:<digest> \
   --outdir results/harmonized
 ```
 
@@ -211,6 +210,10 @@ and `sample_qc.tsv`. It does not apply a scientific MAF threshold. Pass the
 harmonized prefix to the ordinary workflow with `--input_pfile`; the PGS branch
 then creates a scoring-specific view using `--maf` while PCA independently uses
 its fixed reference-marker policy.
+
+The default harmonization container is pinned by immutable GHCR digest. On
+Apptainer/Singularity systems, a site config may instead point
+`harmonization_container` at a shared SIF pulled from that exact digest.
 
 ## Important parameters
 

@@ -76,6 +76,15 @@ least 0.01, and 20 differed in missingness by at least 0.01. This supports a
 combined-sample MAF policy for the unified G2MH analysis while retaining
 source-specific frequencies as QC evidence.
 
+The reusable `harmonize.nf` implementation was then validated on the same
+inputs with Nextflow 26.04.6 and container digest
+`sha256:67420bc37e066425bd85f3a26315a7213f233144409b54169104648edb155bfc`.
+The task completed in 9.487 seconds and published 1,784 samples, 83,965 exact
+shared markers, a 202,718-row marker-QC Parquet, and 1,784 sample-QC rows. Its
+PGEN, PVAR, and PSAM were byte-identical to the independently validated
+standalone merge. All retained marker-QC rows were present in both sources and
+had combined MAF; all 118,753 excluded union rows had an exclusion reason.
+
 Run synthetic round-trip and failure tests:
 
 ```sh
