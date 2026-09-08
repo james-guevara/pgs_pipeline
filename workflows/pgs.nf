@@ -26,10 +26,13 @@ process PREPROCESS_CHROMOSOME {
 
     script:
     def infoFilter = params.r2 != null ? "--extract-if-info R2 >= ${params.r2}" : (params.aq != null ? "--extract-if-info AQ >= ${params.aq}" : '')
+    def dosageModifier = params.vcf_dosage_field ? "dosage=${params.vcf_dosage_field}" : ''
+    def baseMafFilter = params.base_maf != null ? "--maf ${params.base_maf}" : ''
     def memMb = Math.max(1000, task.memory.toMega() - 1000)
     """
     plink2 \
       --vcf ${vcf} \
+      ${dosageModifier} \
       --vcf-half-call missing \
       --snps-only just-acgt \
       --max-alleles 2 \
@@ -48,7 +51,7 @@ process PREPROCESS_CHROMOSOME {
       --pfile filtered \
       --update-name ${rsid_map} 2 1 \
       --extract mapped_ids.txt \
-      --maf ${params.maf} \
+      ${baseMafFilter} \
       --make-pgen \
       --out chr${chr} \
       --threads ${task.cpus} \
@@ -73,11 +76,14 @@ process PREPROCESS_CHROMOSOME_DIRECT {
 
     script:
     def infoFilter = params.r2 != null ? "--extract-if-info R2 >= ${params.r2}" : (params.aq != null ? "--extract-if-info AQ >= ${params.aq}" : '')
+    def dosageModifier = params.vcf_dosage_field ? "dosage=${params.vcf_dosage_field}" : ''
+    def baseMafFilter = params.base_maf != null ? "--maf ${params.base_maf}" : ''
     def memMb = Math.max(1000, task.memory.toMega() - 1000)
     """
     test -r '${vcf}'
     plink2 \
       --vcf '${vcf}' \
+      ${dosageModifier} \
       --vcf-half-call missing \
       --snps-only just-acgt \
       --max-alleles 2 \
@@ -96,7 +102,7 @@ process PREPROCESS_CHROMOSOME_DIRECT {
       --pfile filtered \
       --update-name '${rsid_map}' 2 1 \
       --extract mapped_ids.txt \
-      --maf ${params.maf} \
+      ${baseMafFilter} \
       --make-pgen \
       --out chr${chr} \
       --threads ${task.cpus} \
@@ -117,11 +123,14 @@ process PREPROCESS_CHROMOSOME_DIRECT_NO_RSID {
 
     script:
     def infoFilter = params.r2 != null ? "--extract-if-info R2 >= ${params.r2}" : (params.aq != null ? "--extract-if-info AQ >= ${params.aq}" : '')
+    def dosageModifier = params.vcf_dosage_field ? "dosage=${params.vcf_dosage_field}" : ''
+    def baseMafFilter = params.base_maf != null ? "--maf ${params.base_maf}" : ''
     def memMb = Math.max(1000, task.memory.toMega() - 1000)
     """
     test -r '${vcf}'
     plink2 \
       --vcf '${vcf}' \
+      ${dosageModifier} \
       --vcf-half-call missing \
       --snps-only just-acgt \
       --max-alleles 2 \
@@ -130,7 +139,7 @@ process PREPROCESS_CHROMOSOME_DIRECT_NO_RSID {
       --geno ${params.geno} \
       --set-all-var-ids '@:#:${'$'}r:${'$'}a' \
       ${infoFilter} \
-      --maf ${params.maf} \
+      ${baseMafFilter} \
       --make-pgen \
       --out chr${chr} \
       --threads ${task.cpus} \
@@ -335,7 +344,7 @@ process SCORE_TRAIT {
 
     output:
     tuple val(trait), path("${trait}.sscore"), path("${trait}.score_qc.tsv"), emit: scored
-    path "${trait}.sscore.vars"
+    tuple val(trait), path("${trait}.sscore.vars"), emit: matched
 
     script:
     def inputPrefix = pgen.baseName
@@ -370,7 +379,7 @@ process SCORE_TRAIT_DIRECT {
 
     output:
     tuple val(trait), path("${trait}.sscore"), path("${trait}.score_qc.tsv"), emit: scored
-    path "${trait}.sscore.vars"
+    tuple val(trait), path("${trait}.sscore.vars"), emit: matched
 
     script:
     def inputPrefix = pgen.toString().replaceFirst(/[.]pgen$/, '')
@@ -412,6 +421,39 @@ process COLLATE_SCORE_RESULTS {
     bash ${collate_script} \
       combined_scores.tsv score_qc_summary.tsv \
       ${sscores.join(' ')} -- ${score_qcs.join(' ')}
+    """
+}
+
+process EXPLAIN_SCORE_MATCHING {
+    tag trait
+    label 'small'
+    container params.python_container
+    publishDir "${params.outdir}/05_scores", mode: 'copy'
+
+    input:
+    tuple val(trait), path(weights), val(id_col), val(allele_col), val(effect_col), path(matched_vars)
+    path source_pvar
+    path score_pvar
+    path rsid_map
+    path explanation_script
+
+    output:
+    path "${trait}.variant_match_breakdown.tsv", emit: summaries
+    path "${trait}.unmatched_variants.tsv", emit: details
+
+    script:
+    """
+    python ${explanation_script} \
+      --trait '${trait}' \
+      --weights ${weights} \
+      --id-col ${id_col} \
+      --allele-col ${allele_col} \
+      --source-pvar ${source_pvar} \
+      --score-pvar ${score_pvar} \
+      --rsid-map ${rsid_map} \
+      --matched-vars ${matched_vars} \
+      --summary ${trait}.variant_match_breakdown.tsv \
+      --details ${trait}.unmatched_variants.tsv
     """
 }
 
@@ -915,6 +957,17 @@ workflow PGS_WORKFLOW {
         }
         SCORE_TRAIT(scoreInputs, Channel.value(file("${projectDir}/bin/summarize_score.awk")))
         scoredResults = SCORE_TRAIT.out.scored
+        matchedByTrait = SCORE_TRAIT.out.matched
+        explanationInputs = weights.join(matchedByTrait)
+        sourcePvar = qcPfile.map { pgen, pvar, psam -> pvar }
+        preparedPvar = scorePfile.map { pgen, pvar, psam -> pvar }
+        EXPLAIN_SCORE_MATCHING(
+            explanationInputs,
+            sourcePvar,
+            preparedPvar,
+            scoreRsidMap,
+            Channel.value(file("${projectDir}/bin/explain_score_matching.py"))
+        )
         scoreFiles = scoredResults.map { trait, score, qc -> score }.collect()
         scoreQcFiles = scoredResults.map { trait, score, qc -> qc }.collect()
         COLLATE_SCORE_RESULTS(

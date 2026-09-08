@@ -244,6 +244,8 @@ Apptainer/Singularity systems, a site config may instead point
 | `within_ancestry_ld_step` | `50` | LD-pruning step size in variants |
 | `within_ancestry_ld_r2` | `0.2` | LD-pruning r-squared threshold |
 | `r2` / `aq` | unset | Optional VCF INFO filter; R2 takes precedence |
+| `vcf_dosage_field` | unset | Optional VCF FORMAT dosage field (for example `DS`) preserved during PLINK import |
+| `base_maf` | unset | Optional MAF filter during reusable VCF import; independent of the PGS scoring-view `maf` |
 
 Resource defaults live in `nextflow.config` and can be overridden with `-c`.
 Scoring uses a dedicated portable default of 4 CPUs and 8 GB RAM; site adapters
@@ -251,7 +253,9 @@ can override the `scoring` process label without changing the workflow.
 Python-only processes use the pinned non-slim Python image because it includes
 the `ps` utility required for Nextflow task metrics on Slurm and other executors.
 Each scoring run publishes per-trait QC, `combined_scores.tsv`, and
-`score_qc_summary.tsv` alongside the PLINK score files.
+`score_qc_summary.tsv` alongside the PLINK score files. It also writes a
+per-trait `variant_match_breakdown.tsv` and excluded-variant table that separate
+source absence, score-view MAF removal, and allele incompatibility.
 When both scoring and PCA are enabled, the workflow also publishes
 `07_analysis/analysis_dataset.tsv`: one participant-level table containing PGS
 values, ancestry probabilities, global PCs, within-ancestry PCs, and PCA

@@ -69,6 +69,17 @@ class NextflowStructureTest(unittest.TestCase):
         self.assertNotIn("--update-name '${rsid_map}' 1 2", source)
         self.assertIn("{print ${'$'}2}' '${rsid_map}' > mapped_rsid_ids.txt", source)
         self.assertNotIn("mapped_coordinate_ids.txt", source)
+        self.assertIn("process EXPLAIN_SCORE_MATCHING", source)
+        self.assertIn("variant_match_breakdown.tsv", source)
+
+    def test_vcf_dosage_and_base_maf_are_explicit_and_independent(self):
+        entrypoint = (ROOT / "main.nf").read_text()
+        source = (ROOT / "workflows" / "pgs.nf").read_text()
+        self.assertIn("params.vcf_dosage_field = null", entrypoint)
+        self.assertIn("params.base_maf = null", entrypoint)
+        self.assertIn('dosage=${params.vcf_dosage_field}', source)
+        self.assertIn('--maf ${params.base_maf}', source)
+        self.assertNotIn('--maf ${params.maf} \\\n+      --make-pgen \\\n+      --out chr${chr}', source)
 
 
 if __name__ == "__main__":
