@@ -85,6 +85,14 @@ PGEN, PVAR, and PSAM were byte-identical to the independently validated
 standalone merge. All retained marker-QC rows were present in both sources and
 had combined MAF; all 118,753 excluded union rows had an exclusion reason.
 
+The harmonized PGEN was also passed through the ordinary `main.nf` scoring
+branch with direct PGEN input. The scoring-specific MAF >=1% view reproduced
+the independently calculated reduction from 83,965 to 79,206 markers. A smoke
+score matched all 5 requested variants and produced 1,784 participant scores;
+the per-score and collated QC outputs both passed. This confirms that supplied
+and harmonized PGENs now receive the same explicit scoring-view MAF policy,
+without applying that PGS-specific filter to PCA.
+
 Run synthetic round-trip and failure tests:
 
 ```sh
