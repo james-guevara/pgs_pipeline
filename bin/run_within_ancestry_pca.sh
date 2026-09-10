@@ -26,8 +26,37 @@ for ancestry in AFR AMR EAS EUR SAS; do
     group_dir="$output_dir/$ancestry"
     mkdir -p "$group_dir"
     keep_file="$group_dir/keep.tsv"
-    printf '#IID\n' > "$keep_file"
-    awk -F '\t' -v ancestry="$ancestry" 'NR > 1 && $2 == ancestry {gsub(/\r/, "", $1); print $1}' "$ancestry_tsv" >> "$keep_file"
+    # Preserve the confidence-qualified ANCESTRY field for reporting, but use
+    # each sample's most likely group for within-ancestry PCA when available.
+    # Build a two-column keep file from the source PSAM so nonzero FIDs are
+    # handled correctly instead of silently dropping those samples.
+    awk -F '\t' -v ancestry="$ancestry" '
+      NR == FNR {
+        if (FNR == 1) {
+          for (i = 1; i <= NF; i++) {
+            name = $i; sub(/^#/, "", name)
+            if (name == "IID") iid_col = i
+            if (name == "MOST_LIKELY_ANCESTRY") group_col = i
+            if (name == "ANCESTRY") ancestry_col = i
+          }
+          if (!group_col) group_col = ancestry_col
+          next
+        }
+        gsub(/\r/, "", $iid_col)
+        if ($group_col == ancestry) wanted[$iid_col] = 1
+        next
+      }
+      FNR == 1 {
+        for (i = 1; i <= NF; i++) {
+          name = $i; sub(/^#/, "", name)
+          if (name == "FID") fid_col = i
+          if (name == "IID") psam_iid_col = i
+        }
+        print "#FID\tIID"
+        next
+      }
+      ($psam_iid_col in wanted) { print $fid_col "\t" $psam_iid_col }
+    ' "$ancestry_tsv" "${pfile}.psam" > "$keep_file"
     assigned=$(( $(wc -l < "$keep_file") - 1 ))
 
     reliability=reliable

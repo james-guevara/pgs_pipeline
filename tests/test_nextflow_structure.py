@@ -90,6 +90,14 @@ class NextflowStructureTest(unittest.TestCase):
             self.assertLess(block.index("--extract"), block.index("--update-name"))
             self.assertLess(block.index("--update-name"), block.index("--ref-allele"))
 
+    def test_within_ancestry_uses_argmax_group_and_fid_iid_keep_files(self):
+        classifier = (ROOT / "bin" / "apply_extra_trees.py").read_text()
+        within = (ROOT / "bin" / "run_within_ancestry_pca.sh").read_text()
+        self.assertIn('"MOST_LIKELY_ANCESTRY": classes[best]', classifier)
+        self.assertIn('name == "MOST_LIKELY_ANCESTRY"', within)
+        self.assertIn('print "#FID\\tIID"', within)
+        self.assertIn('"${pfile}.psam" > "$keep_file"', within)
+
 
 if __name__ == "__main__":
     unittest.main()
