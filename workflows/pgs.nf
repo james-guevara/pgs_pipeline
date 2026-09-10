@@ -588,6 +588,13 @@ process PREPARE_PCA_PFILE {
     plink2 \
       --pfile ${inputPrefix} \
       --extract ${usable_ids} \
+      --make-pgen \
+      --out extracted \
+      --threads ${task.cpus} \
+      --memory ${memMb}
+
+    plink2 \
+      --pfile extracted \
       --update-name ${rename_map} 1 2 \
       --make-pgen \
       --out renamed \
@@ -622,6 +629,13 @@ process PREPARE_PCA_PFILE_DIRECT {
     plink2 \
       --pfile '${inputPrefix}' \
       --extract ${usable_ids} \
+      --make-pgen \
+      --out extracted \
+      --threads ${task.cpus} \
+      --memory ${memMb}
+
+    plink2 \
+      --pfile extracted \
       --update-name ${rename_map} 1 2 \
       --make-pgen \
       --out renamed \

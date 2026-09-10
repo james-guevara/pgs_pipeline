@@ -81,6 +81,15 @@ class NextflowStructureTest(unittest.TestCase):
         self.assertIn('--maf ${params.base_maf}', source)
         self.assertNotIn('--maf ${params.maf} \\\n+      --make-pgen \\\n+      --out chr${chr}', source)
 
+    def test_pca_extracts_coordinate_ids_before_renaming_to_panel_ids(self):
+        source = (ROOT / "workflows" / "pgs.nf").read_text()
+        self.assertEqual(source.count("--out extracted"), 2)
+        self.assertEqual(source.count("--pfile extracted"), 2)
+        for process_name in ("PREPARE_PCA_PFILE", "PREPARE_PCA_PFILE_DIRECT"):
+            block = source.split(f"process {process_name} {{", 1)[1].split("\nprocess ", 1)[0]
+            self.assertLess(block.index("--extract"), block.index("--update-name"))
+            self.assertLess(block.index("--update-name"), block.index("--ref-allele"))
+
 
 if __name__ == "__main__":
     unittest.main()
