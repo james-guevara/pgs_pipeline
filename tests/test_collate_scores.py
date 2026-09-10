@@ -44,8 +44,9 @@ class CollateScoresTest(unittest.TestCase):
                     "beta.score_qc.tsv",
                 ],
                 cwd=work,
-                text=True,
-                capture_output=True,
+                universal_newlines=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 check=False,
             )
 
