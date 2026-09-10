@@ -97,6 +97,8 @@ class NextflowStructureTest(unittest.TestCase):
         self.assertIn('name == "MOST_LIKELY_ANCESTRY"', within)
         self.assertIn('print "#FID\\tIID"', within)
         self.assertIn('"${pfile}.psam" > "$keep_file"', within)
+        self.assertIn('name == "ALT_CTS"', within)
+        self.assertIn('name == "OBS_CT"', within)
 
 
 if __name__ == "__main__":
