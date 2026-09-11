@@ -122,8 +122,6 @@ for ancestry in AFR AMR EAS EUR SAS; do
     if (( group_pcs >= unrelated )); then
         group_pcs=$(( unrelated - 1 ))
     fi
-    last_pc=$(( 5 + group_pcs ))
-
     plink2 \
       --pfile "$pfile" \
       --keep "$group_dir/king.king.cutoff.in.id" \
@@ -168,13 +166,29 @@ for ancestry in AFR AMR EAS EUR SAS; do
       --threads "$cpus" \
       --memory "$memory_mb"
 
+    read -r score_id_col score_allele_col first_score_col last_score_col < <(
+      awk -v final_pc="PC${group_pcs}" '
+        NR == 1 {
+          for (i = 1; i <= NF; i++) {
+            name = $i; sub(/^#/, "", name)
+            if (name == "ID") id_col = i
+            if (name == "A1") allele_col = i
+            if (name == "PC1") first_col = i
+            if (name == final_pc) last_col = i
+          }
+          if (!id_col || !allele_col || !first_col || !last_col) exit 2
+          print id_col, allele_col, first_col, last_col
+        }
+      ' "$group_dir/training.eigenvec.allele"
+    )
+
     plink2 \
       --pfile "$pfile" \
       --keep "$keep_file" \
       --extract "$group_dir/training_polymorphic.ids" \
       --read-freq "$group_dir/training.acount" \
-      --score "$group_dir/training.eigenvec.allele" 2 5 header-read no-mean-imputation variance-standardize \
-      --score-col-nums "6-$last_pc" \
+      --score "$group_dir/training.eigenvec.allele" "$score_id_col" "$score_allele_col" header-read no-mean-imputation variance-standardize \
+      --score-col-nums "$first_score_col-$last_score_col" \
       --out "$group_dir/projected" \
       --threads "$cpus" \
       --memory "$memory_mb"

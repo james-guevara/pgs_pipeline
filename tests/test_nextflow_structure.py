@@ -99,6 +99,9 @@ class NextflowStructureTest(unittest.TestCase):
         self.assertIn('"${pfile}.psam" > "$keep_file"', within)
         self.assertIn('name == "ALT_CTS"', within)
         self.assertIn('name == "OBS_CT"', within)
+        self.assertIn('name == "A1"', within)
+        self.assertIn('name == "PC1"', within)
+        self.assertNotIn('--score "$group_dir/training.eigenvec.allele" 2 5', within)
 
 
 if __name__ == "__main__":
