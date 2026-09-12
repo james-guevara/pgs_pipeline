@@ -147,6 +147,30 @@ def merge_many(prefixes, output, dosage_mode="reject"):
     if len(inputs) == 2:
         for label, entry in zip(("first", "second"), input_summaries):
             summary.update({f"{label}_{field}": value for field, value in entry.items()})
+
+    # Reject fractional dosages before opening an output writer. An incomplete
+    # PGEN writer cannot always be closed cleanly after an exception, and NFS
+    # then retains a busy .nfs file in the temporary directory. Production
+    # dosage-preserving merges do not perform this extra pass.
+    if dosage_mode == "reject":
+        with ExitStack() as stack:
+            readers = [stack.enter_context(pg.PgenReader(
+                os.fsencode(str(prefix) + ".pgen"),
+                raw_sample_ct=len(rows), variant_ct=len(index)))
+                for prefix, index, rows, _, _ in inputs]
+            for reader, (prefix, index, rows, _, _) in zip(readers, inputs):
+                hardcalls = np.empty(len(rows), dtype=np.int8)
+                dosages = np.empty(len(rows), dtype=np.float64)
+                for key in keys:
+                    idx = index[key]
+                    reader.read(idx, hardcalls)
+                    reader.read_dosages(idx, dosages)
+                    if not np.array_equal(dosages, hardcalls):
+                        raise ValueError(
+                            f"{prefix}: Dosage differs from hardcall at {':'.join(key)}; "
+                            "hardcall-only merge refused"
+                        )
+
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".pgen-merge-", dir=output.parent) as tmp:
         staging = Path(tmp) / "result"
@@ -163,7 +187,8 @@ def merge_many(prefixes, output, dosage_mode="reject"):
             summary["phase_preserved"] = bool(phased)
             n = offset
             hardcalls = np.empty(n, dtype=np.int8)
-            dosage_buffer = np.empty(max(len(item[2]) for item in inputs), dtype=np.float64)
+            dosage_buffer = (np.empty(max(len(item[2]) for item in inputs), dtype=np.float64)
+                              if dosage_mode == "preserve" else None)
             alleles = np.empty(2 * n, dtype=np.int32) if phased else None
             phase = np.empty(n, dtype=np.uint8) if phased else None
             merged_dosages = np.empty(n, dtype=np.float64) if dosage_mode == "preserve" else None
@@ -176,12 +201,10 @@ def merge_many(prefixes, output, dosage_mode="reject"):
                 for key in keys:
                     for reader, (prefix, index, rows, start, end) in zip(readers, inputs):
                         idx = index[key]
-                        dosage = dosage_buffer[:end - start]
                         reader.read(idx, hardcalls[start:end])
-                        reader.read_dosages(idx, dosage)
-                        if dosage_mode == "reject" and not np.array_equal(dosage, hardcalls[start:end]):
-                            raise ValueError(f"{prefix}: Dosage differs from hardcall at {':'.join(key)}; hardcall-only merge refused")
                         if dosage_mode == "preserve":
+                            dosage = dosage_buffer[:end - start]
+                            reader.read_dosages(idx, dosage)
                             merged_dosages[start:end] = dosage
                         if phased:
                             reader.read_alleles_and_phasepresent(
