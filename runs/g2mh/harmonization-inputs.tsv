@@ -1,0 +1,3 @@
+source	pgen_prefix
+WGS	/expanse/projects/sebat1/s3/data/sebat/G2MH/WGS/plink-base/base
+IMPUTED	/expanse/projects/sebat1/s3/data/sebat/G2MH/imputed/plink-base/base

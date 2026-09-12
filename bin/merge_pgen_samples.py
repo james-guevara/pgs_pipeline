@@ -86,11 +86,29 @@ def samples(prefix):
     _, columns, rows = read_table(Path(str(prefix) + ".psam"), "IID")
     ids = set()
     for row in rows:
-        key = (row.get("FID", "0"), row["IID"])
-        if key in ids:
-            raise ValueError(f"{prefix}: duplicate sample ID {key}")
-        ids.add(key)
+        iid = row["IID"]
+        if iid in ids:
+            raise ValueError(f"{prefix}: duplicate IID {iid}")
+        ids.add(iid)
     return columns, rows, ids
+
+
+def normalize_sample_schema(sample_tables):
+    """Return a stable PSAM schema and fill harmless absent metadata fields."""
+    extras = []
+    for columns, _ in sample_tables:
+        for column in columns:
+            if column not in {"FID", "IID", "SEX"} and column not in extras:
+                extras.append(column)
+    columns = ["FID", "IID", "SEX", *extras]
+    normalized = []
+    for _, rows in sample_tables:
+        normalized.append([
+            {column: (row.get(column) or ("0" if column == "FID" else "NA"))
+             for column in columns}
+            for row in rows
+        ])
+    return columns, normalized
 
 
 def merge(first, second, output, dosage_mode="reject"):
@@ -108,14 +126,12 @@ def merge_many(prefixes, output, dosage_mode="reject"):
     if output.exists():
         raise ValueError(f"Output directory already exists: {output}")
     inputs, seen_ids, references = [], set(), set()
-    columns = None
+    sample_tables = []
     offset = 0
     for prefix in prefixes:
         headers, index = variants(prefix)
         current_columns, rows, ids = samples(prefix)
-        if columns is not None and current_columns != columns:
-            raise ValueError(f"{prefix}: PSAM column names/order must match; harmonize the sample metadata first")
-        columns = current_columns
+        sample_tables.append((current_columns, rows))
         if seen_ids & ids:
             raise ValueError(f"{prefix}: Overlapping sample IDs: {len(seen_ids & ids)}")
         seen_ids.update(ids)
@@ -125,6 +141,11 @@ def merge_many(prefixes, output, dosage_mode="reject"):
         references.update(current_refs)
         inputs.append((prefix, index, rows, offset, offset + len(rows)))
         offset += len(rows)
+    columns, normalized_rows = normalize_sample_schema(sample_tables)
+    inputs = [
+        (prefix, index, rows, start, end)
+        for (prefix, index, _, start, end), rows in zip(inputs, normalized_rows)
+    ]
     keys = list(inputs[0][1])
     for _, index, _, _, _ in inputs[1:]:
         keys = [key for key in keys if key in index]

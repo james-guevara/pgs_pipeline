@@ -1,0 +1,23 @@
+{
+  "cohort": "g2mh_wgs_imputed_r2_080",
+  "genome_build": "GRCh38",
+  "direct_inputs": true,
+  "run_summary_qc": true,
+  "run_scores": true,
+  "score_sheet": "runs/g2mh/scores.tsv",
+  "score_rsid_map": "/expanse/projects/sebat1/s3/data/sebat/resources/pgs/grch38/grch38-autosomes-rsid.map",
+  "maf": 0.01,
+  "run_pca": true,
+  "pca_reference_sheet": "/expanse/projects/sebat1/s3/data/sebat/pgs_wf_1kg/releases/1kg_grch38_v1/pca_reference.tsv",
+  "min_pca_variant_overlap": 0.50,
+  "num_pcs": 10,
+  "num_within_ancestry_pcs": 10,
+  "min_ancestry_samples": 50,
+  "within_ancestry_king_cutoff": 0.0884,
+  "within_ancestry_ld_window": 200,
+  "within_ancestry_ld_step": 50,
+  "within_ancestry_ld_r2": 0.2,
+  "shared_work_dir": "/expanse/projects/sebat1/j3guevar/pgs_pipeline/work/g2mh-clean-release",
+  "outdir": "/expanse/projects/sebat1/s3/data/sebat/G2MH/combined/pgs-ancestry",
+  "report_dir": "/expanse/projects/sebat1/s3/data/sebat/G2MH/manifests/pgs-ancestry-pipeline-info"
+}

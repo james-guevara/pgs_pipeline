@@ -54,8 +54,9 @@ class MergeTests(unittest.TestCase):
         with pg.PgenReader(str(out / 'merged.pgen').encode()) as reader:
             reader.read_range(0,2,observed)
         np.testing.assert_array_equal(observed, [[0,1,-9,-9,2],[2,-9,0,1,2]])
-        self.assertEqual((out / 'merged.psam').read_text().splitlines()[1:],
-                         ['a0\t0','a1\t0','a2\t0','b0\t0','b1\t0'])
+        self.assertEqual((out / 'merged.psam').read_text().splitlines(),
+                         ['#FID\tIID\tSEX', '0\ta0\t0', '0\ta1\t0',
+                          '0\ta2\t0', '0\tb0\t0', '0\tb1\t0'])
         self.assertIn('1:10:A:C', (out / 'merged.pvar').read_text())
         self.assertEqual(json.loads((out / 'merge_summary.json').read_text()), summary)
         with self.assertRaisesRegex(ValueError, 'already exists'):
@@ -113,7 +114,7 @@ class MergeTests(unittest.TestCase):
         np.testing.assert_array_equal(alleles, [1,1,-9,-9,0,1,1,0])
         np.testing.assert_array_equal(phase, [1,0,0,1])
         self.assertEqual((out / 'merged.psam').read_text().splitlines()[1:],
-                         ['a0\t0','a1\t0','b0\t0','c0\t0'])
+                         ['0\ta0\t0','0\ta1\t0','0\tb0\t0','0\tc0\t0'])
         self.assertIn('1:20:G:T', (out / 'merged.pvar').read_text())
 
     def test_later_input_validation(self):
@@ -167,6 +168,24 @@ class MergeTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             MOD.merge(a,b,self.root/'out')
         self.assertFalse((self.root/'out').exists())
+
+    def test_psam_schema_is_normalized_and_overlap_uses_iid(self):
+        a = self.fixture('a', [(10, 'A', 'C')], [[0]], ids=['a0'])
+        b = self.fixture('b', [(10, 'A', 'C')], [[1]], ids=['b0'])
+        a.with_suffix('.psam').write_text('#IID\tSEX\na0\t1\n')
+        b.with_suffix('.psam').write_text('#SID\tIID\tFID\nb_sid\tb0\tfam_b\n')
+        out = self.root / 'out'
+        MOD.merge(a, b, out)
+        self.assertEqual((out / 'merged.psam').read_text().splitlines(), [
+            '#FID\tIID\tSEX\tSID',
+            '0\ta0\t1\tNA',
+            'fam_b\tb0\tNA\tb_sid',
+        ])
+
+        c = self.fixture('c', [(10, 'A', 'C')], [[2]], ids=['a0'])
+        c.with_suffix('.psam').write_text('#FID\tIID\tSEX\nother_family\ta0\t2\n')
+        with self.assertRaisesRegex(ValueError, 'Overlapping'):
+            MOD.merge(a, c, self.root / 'overlap')
 
 
 if __name__ == '__main__':

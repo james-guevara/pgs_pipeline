@@ -32,10 +32,12 @@ Use inputs on the same genome build; differing `##reference` metadata is rejecte
 among inputs that provide it, but missing metadata cannot establish the build.
 
 All inputs must contain only biallelic A/C/G/T SNPs and unique variant keys.
-Sample identity uses `(FID, IID)`, with omitted FID treated as `0`; duplicate or
-overlapping identities are rejected even if SID differs. PSAM column names and
-order must match across every input. All sample fields are copied in command-line
-input order, preserving sample order within each fileset.
+Sample identity uses `IID`, with omitted FID treated as `0`; duplicate or
+overlapping identities are rejected even if FID differs. Inputs may have
+different PSAM columns or column order. Output is normalized to `FID`, `IID`,
+`SEX`, followed by any additional input columns; absent FID and SEX values become
+`0` and `NA`, respectively, and other absent metadata become `NA`. Samples retain
+command-line input order and their order within each fileset.
 
 By default, missing hardcalls and hardcall phase are preserved, and retained
 dosages which differ from hardcalls cause an error. With `--dosage-mode
