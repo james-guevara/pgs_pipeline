@@ -103,6 +103,13 @@ class NextflowStructureTest(unittest.TestCase):
         self.assertIn('name == "PC1"', within)
         self.assertNotIn('--score "$group_dir/training.eigenvec.allele" 2 5', within)
 
+    def test_analysis_join_resolves_iid_headers_and_argmax_groups(self):
+        source = (ROOT / "bin" / "build_analysis_dataset.py").read_text()
+        self.assertIn('def sample_id(row):', source)
+        self.assertIn('id_candidates = ("IID", "#IID")', source)
+        self.assertIn('"MOST_LIKELY_ANCESTRY" in ancestry_fields', source)
+        self.assertIn('"ANCESTRY_MOST_LIKELY"', source)
+
 
 if __name__ == "__main__":
     unittest.main()
