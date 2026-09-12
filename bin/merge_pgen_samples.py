@@ -3,6 +3,7 @@
 
 import argparse
 from contextlib import ExitStack, contextmanager
+import gc
 import json
 import os
 from pathlib import Path
@@ -19,10 +20,17 @@ def pgen_writer(*args, **kwargs):
         yield writer
     except BaseException:
         # pgenlib complains about incomplete output on close; retain the cause.
+        output_path = Path(os.fsdecode(args[0]))
         try:
             writer.close()
         except RuntimeError:
             pass
+        # Incomplete PGENs are never valid outputs. Explicit unlinking also
+        # avoids delayed shared-filesystem cleanup failures when the enclosing
+        # temporary directory is removed immediately after an expected error.
+        del writer
+        gc.collect()
+        output_path.unlink(missing_ok=True)
         raise
     else:
         writer.close()
