@@ -104,7 +104,18 @@ for ancestry in AFR AMR EAS EUR SAS; do
       --threads "$cpus" \
       --memory "$memory_mb"
 
-    awk 'NR > 1 && $5 > 0 && $5 < $6 {print $2}' "$group_dir/training.acount" > "$group_dir/training_polymorphic.ids"
+    awk 'BEGIN { FS=OFS="\t" }
+         NR == 1 {
+             for (i=1; i<=NF; i++) {
+                 if ($i == "ID") id_col=i
+                 else if ($i == "ALT_CTS") alt_cts_col=i
+                 else if ($i == "OBS_CT") obs_ct_col=i
+             }
+             if (!id_col || !alt_cts_col || !obs_ct_col) exit 2
+             next
+         }
+         $alt_cts_col > 0 && $alt_cts_col < $obs_ct_col { print $id_col }' \
+      "$group_dir/training.acount" > "$group_dir/training_polymorphic.ids"
     pca_variants=$(wc -l < "$group_dir/training_polymorphic.ids")
     if (( pca_variants == 0 )); then
         printf 'ancestry\tassigned_samples\tunrelated_training_samples\treason\n%s\t%d\t%d\tno_polymorphic_training_variants\n' \
