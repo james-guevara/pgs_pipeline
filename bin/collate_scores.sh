@@ -40,7 +40,7 @@ for score in "${scores[@]}"; do
         BEGIN { FS=OFS="\t" }
         NR == 1 {
             for (i=1; i<=NF; i++) {
-                if ($i == "#IID") iid=i
+                if ($i == "IID" || $i == "#IID") iid=i
                 if ($i == "SCORE1_AVG") score=i
             }
             if (!iid || !score) exit 2

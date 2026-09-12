@@ -17,13 +17,19 @@ def read_rows(path):
         return reader.fieldnames, list(reader)
 
 
-def index_rows(path, id_column):
+def sample_id(row):
+    return row.get("IID") or row.get("#IID")
+
+
+def index_rows(path):
     fields, rows = read_rows(path)
-    if id_column not in fields:
-        raise ValueError(f"{path} is missing {id_column}")
+    id_candidates = ("IID", "#IID")
+    resolved_id_column = next((candidate for candidate in id_candidates if candidate in fields), None)
+    if resolved_id_column is None:
+        raise ValueError(f"{path} is missing a sample identifier column ({', '.join(id_candidates)})")
     indexed = {}
     for row in rows:
-        sample = row[id_column]
+        sample = row[resolved_id_column]
         if not sample:
             raise ValueError(f"{path} contains an empty sample ID")
         if sample in indexed:
@@ -54,10 +60,15 @@ def main():
     parser.add_argument("--dictionary", type=Path, required=True)
     args = parser.parse_args()
 
-    score_fields, score_rows, scores = index_rows(args.scores, "IID")
-    _, _, global_pcs = index_rows(args.global_pcs, "#IID")
-    ancestry_fields, _, ancestries = index_rows(args.ancestry, "#IID")
-    score_traits = [field for field in score_fields if field != "IID"]
+    score_fields, score_rows, scores = index_rows(args.scores)
+    _, _, global_pcs = index_rows(args.global_pcs)
+    ancestry_fields, _, ancestries = index_rows(args.ancestry)
+    within_group_field = (
+        "MOST_LIKELY_ANCESTRY"
+        if "MOST_LIKELY_ANCESTRY" in ancestry_fields
+        else "ANCESTRY"
+    )
+    score_traits = [field for field in score_fields if field not in {"IID", "#IID", "FID", "#FID"}]
 
     expected_ids = set(scores)
     for label, indexed in (("global PCs", global_pcs), ("ancestry", ancestries)):
@@ -83,21 +94,21 @@ def main():
             raise ValueError(f"Completed ancestry group {group} has no pcs.tsv")
         if not pcs_path.exists():
             continue
-        _, rows, indexed = index_rows(pcs_path, "#IID")
+        _, rows, indexed = index_rows(pcs_path)
         for sample, row in indexed.items():
             if sample not in expected_ids:
                 raise ValueError(f"Within-ancestry sample {sample} is absent from scores")
-            if ancestries[sample]["ANCESTRY"] != group:
+            if ancestries[sample][within_group_field] != group:
                 raise ValueError(
                     f"Within-ancestry group mismatch for {sample}: "
-                    f"{group} vs {ancestries[sample]['ANCESTRY']}"
+                    f"{group} vs {ancestries[sample][within_group_field]}"
                 )
             if sample in within_by_sample:
                 raise ValueError(f"Sample {sample} occurs in multiple within-ancestry files")
             within_by_sample[sample] = row
 
     probability_fields = [field for field in ancestry_fields if field.startswith("PROB_")]
-    output_fields = ["IID", "ANCESTRY", "ANCESTRY_MAX_PROBABILITY"]
+    output_fields = ["IID", "ANCESTRY", "ANCESTRY_MOST_LIKELY", "ANCESTRY_MAX_PROBABILITY"]
     output_fields.extend(f"ANCESTRY_{field}" for field in probability_fields)
     output_fields.extend(f"GLOBAL_PC{index}" for index in range(1, args.num_global_pcs + 1))
     output_fields.extend([
@@ -112,12 +123,13 @@ def main():
         writer = csv.DictWriter(handle, fieldnames=output_fields, delimiter="\t", lineterminator="\n")
         writer.writeheader()
         for score_row in score_rows:
-            sample = score_row["IID"]
+            sample = sample_id(score_row)
             ancestry = ancestries[sample]
             global_row = global_pcs[sample]
             result = {
                 "IID": sample,
                 "ANCESTRY": ancestry["ANCESTRY"],
+                "ANCESTRY_MOST_LIKELY": ancestry[within_group_field],
                 "ANCESTRY_MAX_PROBABILITY": ancestry["MAX_PROBABILITY"],
             }
             for field in probability_fields:
@@ -125,7 +137,7 @@ def main():
             for index in range(1, args.num_global_pcs + 1):
                 result[f"GLOBAL_PC{index}"] = global_row[f"PC{index}_AVG"]
 
-            status = status_by_group.get(ancestry["ANCESTRY"])
+            status = status_by_group.get(ancestry[within_group_field])
             within_row = within_by_sample.get(sample)
             if status:
                 result.update({
@@ -147,6 +159,7 @@ def main():
     dictionary = []
     add_dictionary(dictionary, "IID", "string", False, "Participant/sample identifier.", "All sample-level outputs")
     add_dictionary(dictionary, "ANCESTRY", "categorical", False, "Assigned global ancestry or uncertain label.", "ancestry_probabilities.tsv")
+    add_dictionary(dictionary, "ANCESTRY_MOST_LIKELY", "categorical", False, "Highest-probability ancestry used to define the within-ancestry PCA group.", "ancestry_probabilities.tsv")
     add_dictionary(dictionary, "ANCESTRY_MAX_PROBABILITY", "float", False, "Highest ancestry assignment probability.", "ancestry_probabilities.tsv")
     for field in probability_fields:
         group = field.removeprefix("PROB_")

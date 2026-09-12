@@ -40,7 +40,7 @@ def main():
     with args.scores.open(newline="") as source, args.output.open("w", newline="") as target:
         reader = csv.DictReader(source, delimiter="\t")
         id_column = "#IID" if "#IID" in reader.fieldnames else "IID"
-        output_fields = [id_column, "ANCESTRY", "MAX_PROBABILITY"] + [
+        output_fields = [id_column, "ANCESTRY", "MOST_LIKELY_ANCESTRY", "MAX_PROBABILITY"] + [
             f"PROB_{label}" for label in classes
         ]
         writer = csv.DictWriter(target, fieldnames=output_fields, delimiter="\t")
@@ -57,6 +57,7 @@ def main():
             result = {
                 id_column: row[id_column],
                 "ANCESTRY": assignment,
+                "MOST_LIKELY_ANCESTRY": classes[best],
                 "MAX_PROBABILITY": f"{probabilities[best]:.10g}",
             }
             result.update({f"PROB_{label}": f"{probabilities[index]:.10g}" for index, label in enumerate(classes)})

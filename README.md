@@ -19,6 +19,49 @@ The original Python and Slurm entrypoints remain for reference. `main.nf` is the
 portable orchestration entrypoint; cloud queues and filesystem mounts are
 deployment profiles, not part of the scientific workflow.
 
+## Reusable DSL2 workflow
+
+`main.nf` is a thin standalone wrapper around the named workflow in
+`workflows/pgs.nf`:
+
+```nextflow
+include { PGS_WORKFLOW } from './workflows/pgs'
+
+workflow {
+    PGS_WORKFLOW()
+}
+```
+
+This preserves every existing standalone parameter and process while allowing a
+larger DSL2 pipeline to include the PGS branch directly. `PGS_WORKFLOW` emits:
+
+- `qc_pfile`: the post-missingness-QC PGEN/PVAR/PSAM tuple, or the supplied QCed
+  PGEN tuple;
+- `combined_scores`: collated PGS values when scoring is enabled;
+- `global_pcs`, `ancestry_assignments`, and `within_ancestry` when PCA is enabled;
+- `analysis_dataset` and `analysis_dictionary` when both scoring and PCA are
+  enabled.
+
+Disabled optional branches emit empty channels. A composed parent workflow should
+set the same documented `params.*` values before invoking `PGS_WORKFLOW`; executor
+and container choices remain in configuration profiles. Do not launch this pipeline
+as a nested Nextflow process.
+
+On Expanse, submit the long-lived controller through
+`scripts/run_nextflow_expanse.sh` rather than running Java on a login node. The
+controller itself receives a small `ind-shared` allocation and submits the scientific
+processes through the existing Expanse profile. This avoids login-node native-thread
+limits when many chromosome or score tasks finish together.
+
+### Reusable-workflow regression validation
+
+The named-workflow refactor was validated on the G2MH integrated-analysis inputs
+with Nextflow 26.04.6 on Expanse. The fresh run completed successfully in 7 minutes
+11 seconds. Its final `analysis_dataset.tsv` (1,043 participants and 55 variables)
+and `analysis_dataset_dictionary.tsv` were byte-for-byte identical to the outputs
+from the previously validated standalone workflow. This verifies that exposing the
+workflow as `PGS_WORKFLOW` changed orchestration only, not scientific results.
+
 ## Required inputs
 
 - One bgzipped VCF per chromosome.
@@ -151,6 +194,31 @@ not put access keys in this repository; use IAM roles or the AWS credential
 chain. The AWS profile follows Nextflow's documented model of a Batch queue, S3
 work directory, and AWS CLI in the task image ([Nextflow documentation](https://training.nextflow.io/2.5.0/archive/basic_training/executors/)).
 
+## Optional sample-axis harmonization
+
+`harmonize.nf` combines two or more PGEN filesets with disjoint samples when an
+analysis requires the same exact marker set across sources. Its two-column TSV
+input has `source` and `pgen_prefix` fields; see
+`examples/harmonization_inputs.tsv`. Prefixes must be visible to the worker
+container and point to matching-build `.pgen`, `.pvar`, and `.psam` files.
+
+```sh
+nextflow run harmonize.nf \
+  --input_manifest examples/harmonization_inputs.tsv \
+  --outdir results/harmonized
+```
+
+The stage preserves dosage and emits exactly four scientific products: a
+`harmonized` PGEN fileset, `harmonization_summary.json`, `marker_qc.parquet`,
+and `sample_qc.tsv`. It does not apply a scientific MAF threshold. Pass the
+harmonized prefix to the ordinary workflow with `--input_pfile`; the PGS branch
+then creates a scoring-specific view using `--maf` while PCA independently uses
+its fixed reference-marker policy.
+
+The default harmonization container is pinned by immutable GHCR digest. On
+Apptainer/Singularity systems, a site config may instead point
+`harmonization_container` at a shared SIF pulled from that exact digest.
+
 ## Important parameters
 
 | Parameter | Default | Meaning |
@@ -161,10 +229,11 @@ work directory, and AWS CLI in the task image ([Nextflow documentation](https://
 | `genome_build` | `GRCh38` | Cohort genome build; must match the PCA reference |
 | `mac` | `10` | Minimum allele count |
 | `geno` | `0.05` | Initial genotype missingness threshold |
-| `maf` | `0.01` | Initial minor allele frequency threshold |
+| `maf` | `0.01` | PGS scoring-view MAF threshold; applied to VCF-derived and supplied PGEN inputs |
 | `variant_miss` | `0.05` | Variant missingness threshold |
 | `sample_miss` | `0.05` | Sample missingness threshold |
 | `run_scores` | `false` | Run PLINK2 scoring branch |
+| `score_rsid_map` | unset | Optional two-column coordinate-ID to rsID map applied only to the PGS scoring view |
 | `run_summary_qc` | `true` | Generate cohort-wide missingness, HWE, and frequency summaries; set false for repeated scoring-only runs |
 | `min_score_variant_match` | `0.50` | Fail a trait when fewer than this fraction of weight variants are scored |
 | `warn_score_variant_match` | `0.80` | Flag a trait QC row below this match fraction |
@@ -179,6 +248,8 @@ work directory, and AWS CLI in the task image ([Nextflow documentation](https://
 | `within_ancestry_ld_step` | `50` | LD-pruning step size in variants |
 | `within_ancestry_ld_r2` | `0.2` | LD-pruning r-squared threshold |
 | `r2` / `aq` | unset | Optional VCF INFO filter; R2 takes precedence |
+| `vcf_dosage_field` | unset | Optional VCF FORMAT dosage field (for example `DS`) preserved during PLINK import |
+| `base_maf` | unset | Optional MAF filter during reusable VCF import; independent of the PGS scoring-view `maf` |
 
 Resource defaults live in `nextflow.config` and can be overridden with `-c`.
 Scoring uses a dedicated portable default of 4 CPUs and 8 GB RAM; site adapters
@@ -186,7 +257,9 @@ can override the `scoring` process label without changing the workflow.
 Python-only processes use the pinned non-slim Python image because it includes
 the `ps` utility required for Nextflow task metrics on Slurm and other executors.
 Each scoring run publishes per-trait QC, `combined_scores.tsv`, and
-`score_qc_summary.tsv` alongside the PLINK score files.
+`score_qc_summary.tsv` alongside the PLINK score files. It also writes a
+per-trait `variant_match_breakdown.tsv` and excluded-variant table that separate
+source absence, score-view MAF removal, and allele incompatibility.
 When both scoring and PCA are enabled, the workflow also publishes
 `07_analysis/analysis_dataset.tsv`: one participant-level table containing PGS
 values, ancestry probabilities, global PCs, within-ancestry PCs, and PCA

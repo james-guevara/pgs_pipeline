@@ -26,8 +26,37 @@ for ancestry in AFR AMR EAS EUR SAS; do
     group_dir="$output_dir/$ancestry"
     mkdir -p "$group_dir"
     keep_file="$group_dir/keep.tsv"
-    printf '#IID\n' > "$keep_file"
-    awk -F '\t' -v ancestry="$ancestry" 'NR > 1 && $2 == ancestry {gsub(/\r/, "", $1); print $1}' "$ancestry_tsv" >> "$keep_file"
+    # Preserve the confidence-qualified ANCESTRY field for reporting, but use
+    # each sample's most likely group for within-ancestry PCA when available.
+    # Build a two-column keep file from the source PSAM so nonzero FIDs are
+    # handled correctly instead of silently dropping those samples.
+    awk -F '\t' -v ancestry="$ancestry" '
+      NR == FNR {
+        if (FNR == 1) {
+          for (i = 1; i <= NF; i++) {
+            name = $i; sub(/^#/, "", name)
+            if (name == "IID") iid_col = i
+            if (name == "MOST_LIKELY_ANCESTRY") group_col = i
+            if (name == "ANCESTRY") ancestry_col = i
+          }
+          if (!group_col) group_col = ancestry_col
+          next
+        }
+        gsub(/\r/, "", $iid_col)
+        if ($group_col == ancestry) wanted[$iid_col] = 1
+        next
+      }
+      FNR == 1 {
+        for (i = 1; i <= NF; i++) {
+          name = $i; sub(/^#/, "", name)
+          if (name == "FID") fid_col = i
+          if (name == "IID") psam_iid_col = i
+        }
+        print "#FID\tIID"
+        next
+      }
+      ($psam_iid_col in wanted) { print $fid_col "\t" $psam_iid_col }
+    ' "$ancestry_tsv" "${pfile}.psam" > "$keep_file"
     assigned=$(( $(wc -l < "$keep_file") - 1 ))
 
     reliability=reliable
@@ -93,8 +122,6 @@ for ancestry in AFR AMR EAS EUR SAS; do
     if (( group_pcs >= unrelated )); then
         group_pcs=$(( unrelated - 1 ))
     fi
-    last_pc=$(( 5 + group_pcs ))
-
     plink2 \
       --pfile "$pfile" \
       --keep "$group_dir/king.king.cutoff.in.id" \
@@ -104,7 +131,22 @@ for ancestry in AFR AMR EAS EUR SAS; do
       --threads "$cpus" \
       --memory "$memory_mb"
 
-    awk 'NR > 1 && $5 > 0 && $5 < $6 {print $2}' "$group_dir/training.acount" > "$group_dir/training_polymorphic.ids"
+    # Resolve columns by name: PLINK releases may add fields (for example,
+    # PROVISIONAL_REF?) before ALT_CTS. Positional parsing would then silently
+    # classify every variant as monomorphic.
+    awk '
+      NR == 1 {
+        for (i = 1; i <= NF; i++) {
+          name = $i; sub(/^#/, "", name)
+          if (name == "ID") id_col = i
+          if (name == "ALT_CTS") alt_col = i
+          if (name == "OBS_CT") obs_col = i
+        }
+        if (!id_col || !alt_col || !obs_col) exit 2
+        next
+      }
+      $alt_col > 0 && $alt_col < $obs_col { print $id_col }
+    ' "$group_dir/training.acount" > "$group_dir/training_polymorphic.ids"
     pca_variants=$(wc -l < "$group_dir/training_polymorphic.ids")
     if (( pca_variants == 0 )); then
         printf 'ancestry\tassigned_samples\tunrelated_training_samples\treason\n%s\t%d\t%d\tno_polymorphic_training_variants\n' \
@@ -124,13 +166,29 @@ for ancestry in AFR AMR EAS EUR SAS; do
       --threads "$cpus" \
       --memory "$memory_mb"
 
+    read -r score_id_col score_allele_col first_score_col last_score_col < <(
+      awk -v final_pc="PC${group_pcs}" '
+        NR == 1 {
+          for (i = 1; i <= NF; i++) {
+            name = $i; sub(/^#/, "", name)
+            if (name == "ID") id_col = i
+            if (name == "A1") allele_col = i
+            if (name == "PC1") first_col = i
+            if (name == final_pc) last_col = i
+          }
+          if (!id_col || !allele_col || !first_col || !last_col) exit 2
+          print id_col, allele_col, first_col, last_col
+        }
+      ' "$group_dir/training.eigenvec.allele"
+    )
+
     plink2 \
       --pfile "$pfile" \
       --keep "$keep_file" \
       --extract "$group_dir/training_polymorphic.ids" \
       --read-freq "$group_dir/training.acount" \
-      --score "$group_dir/training.eigenvec.allele" 2 5 header-read no-mean-imputation variance-standardize \
-      --score-col-nums "6-$last_pc" \
+      --score "$group_dir/training.eigenvec.allele" "$score_id_col" "$score_allele_col" header-read no-mean-imputation variance-standardize \
+      --score-col-nums "$first_score_col-$last_score_col" \
       --out "$group_dir/projected" \
       --threads "$cpus" \
       --memory "$memory_mb"
