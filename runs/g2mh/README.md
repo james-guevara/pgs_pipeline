@@ -52,3 +52,7 @@ overlap is checked by IID, not by an `(FID, IID)` pair.
 7. Global and within-ancestry PC outputs contain exactly the expected IIDs.
 8. The participant analysis table has one row per IID and no missing-data-to-zero coercion.
 9. Outputs are compared with the validated 2026-09-11 run before release.
+
+The 2026-09-12 clean release passed all gates. See `VALIDATION.md` and
+`release-validation-2026-09-12.json` for the regression result, job IDs,
+timings, and checksums.

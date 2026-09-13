@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "status": "validated",
+  "validated_at": "2026-09-12",
+  "cohort": "g2mh_wgs_imputed_r2_080",
+  "release_root": "/expanse/projects/sebat1/s3/data/sebat/G2MH/combined/pgs-ancestry",
+  "workflow": {
+    "repository": "https://github.com/james-guevara/pgs_pipeline",
+    "git_commit": "e9473f98eb75e9d00b862bca50b5d0bd37f2fc89",
+    "nextflow_version": "26.04.6"
+  },
+  "runs": {
+    "harmonization_controller_job": "54268999",
+    "harmonization_task_job": "54269000",
+    "harmonization_task_seconds": 750,
+    "downstream_controller_job": "54269024",
+    "downstream_controller_seconds": 268,
+    "comparison_job": "54275023"
+  },
+  "substrate": {
+    "wgs_samples": 1065,
+    "imputed_samples": 719,
+    "output_samples": 1784,
+    "union_markers": 12387256,
+    "output_markers": 7736319,
+    "dosage_policy": "preserve",
+    "matching": "exact CHROM, POS, REF, ALT; intersection; first-input order"
+  },
+  "pca": {
+    "reference_markers": 111276,
+    "usable_markers": 65782,
+    "usable_fraction": 0.59116072,
+    "minimum_fraction": 0.5,
+    "within_ancestry_status": "completed for AFR, AMR, EAS, EUR, and SAS",
+    "small_sample_flags": ["EAS", "SAS"]
+  },
+  "pgs": {
+    "traits": 20,
+    "requested_variants_per_trait": 1154522,
+    "matched_variants_per_trait": 948662,
+    "match_fraction": 0.82169244,
+    "status": "all pass"
+  },
+  "regression_comparison": {
+    "reference_root": "/expanse/projects/sebat1/j3guevar/pgs_pipeline/g2mh-harmonized-pca-pgs-r2-080-20260911",
+    "result": "byte-for-byte identical",
+    "compared": [
+      "harmonized PGEN/PVAR/PSAM",
+      "marker and sample QC",
+      "all PGS and score QC",
+      "global PCs and ancestry probabilities",
+      "all within-ancestry PC tables and status",
+      "PCA panel overlap",
+      "participant analysis dataset and data dictionary"
+    ]
+  },
+  "sha256": {
+    "harmonized.pgen": "a6cc5ebfca970cd583bceb9249453e8b2287de8676a315aeb0b522e916b31d17",
+    "harmonized.pvar": "c73cdc4723f48b9184944c03cf5bcb46addd6b9e9775d36ac6cdb3b29b0feb14",
+    "harmonized.psam": "687b955de532b18cf5278b103a96b0b74f8967bee57e8da834c4435177c603eb",
+    "marker_qc.parquet": "d2e0193d245276414a3b5c55264347c0f4e463c8dd00d6b0c49875066332e3b2",
+    "sample_qc.tsv": "c93ec4908eca5064bef19ebe473b40f683c891cb4e74258f762262b3c95c1a21",
+    "combined_scores.tsv": "22557146137788e997c5e3f279a51dd632b65f0e27d6fbdf17c479372ae7c391",
+    "score_qc_summary.tsv": "67d3253a5bdcbe3e82604445304de822ab20c3fbcd4da4cfe29d9eb5b3135de9",
+    "global_pcs.tsv": "347f685225edf9dbe540d20968cbd327b341f0f703ff4477653db23b58805085",
+    "ancestry_probabilities.tsv": "0d89833e254b786a939edfc50acc54ff4291e2f8575b723a48c67706f46b8080",
+    "within_ancestry_status.tsv": "d233b53cf0d6180dbea22c42dec502db5f079a31a20d53ab22ebac078f35c6a9",
+    "analysis_dataset.tsv": "b23addef1691dfeab33038821e51f5a1d06fa5342196870de6cbd67b0e9f058a",
+    "analysis_dataset_dictionary.tsv": "d6a7b526f1f4e38b2a8895a7163f946f186fd4cf666acb6bd7ff627692819d54"
+  }
+}
