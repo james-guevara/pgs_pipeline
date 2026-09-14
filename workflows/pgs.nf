@@ -735,6 +735,7 @@ process WITHIN_ANCESTRY_PCA {
       ${params.within_ancestry_ld_window} \
       ${params.within_ancestry_ld_step} \
       ${params.within_ancestry_ld_r2} \
+      ${params.within_ancestry_maf} \
       ${task.cpus} \
       ${memMb} \
       within_ancestry
@@ -768,6 +769,7 @@ process WITHIN_ANCESTRY_PCA_DIRECT {
       ${params.within_ancestry_ld_window} \
       ${params.within_ancestry_ld_step} \
       ${params.within_ancestry_ld_r2} \
+      ${params.within_ancestry_maf} \
       ${task.cpus} \
       ${memMb} \
       within_ancestry

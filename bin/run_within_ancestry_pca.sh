@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 11 ]]; then
-    echo "usage: $0 PFILE ANCESTRY_TSV MIN_SAMPLES NUM_PCS KING_CUTOFF LD_WINDOW LD_STEP LD_R2 CPUS MEMORY_MB OUTPUT_DIR" >&2
+if [[ $# -ne 12 ]]; then
+    echo "usage: $0 PFILE ANCESTRY_TSV MIN_SAMPLES NUM_PCS KING_CUTOFF LD_WINDOW LD_STEP LD_R2 MAF CPUS MEMORY_MB OUTPUT_DIR" >&2
     exit 2
 fi
 
@@ -14,9 +14,10 @@ king_cutoff=$5
 ld_window=$6
 ld_step=$7
 ld_r2=$8
-cpus=$9
-memory_mb=${10}
-output_dir=${11}
+maf=$9
+cpus=${10}
+memory_mb=${11}
+output_dir=${12}
 
 mkdir -p "$output_dir"
 status_file="$output_dir/status.tsv"
@@ -86,6 +87,7 @@ for ancestry in AFR AMR EAS EUR SAS; do
     plink2 \
       --pfile "$pfile" \
       --keep "$keep_file" \
+      --maf "$maf" \
       "${ld_sample_override[@]}" \
       --indep-pairwise "$ld_window" "$ld_step" "$ld_r2" \
       --out "$group_dir/prune" \
