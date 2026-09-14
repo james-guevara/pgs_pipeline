@@ -14,12 +14,12 @@ SPEC.loader.exec_module(MODULE)
 class AuditWithinAncestryPcsTests(unittest.TestCase):
     def test_manifest_aliases_are_combined(self):
         manifest = pd.DataFrame({
-            "Genomic_ID": ["wgs1", None],
-            "guid": [None, "imp1"],
+            "source_a_id": ["sample1", None],
+            "source_b_id": [None, "sample2"],
             "site": ["A", "B"],
         })
-        lookup = MODULE.build_manifest_lookup(manifest, ["Genomic_ID", "guid"])
-        self.assertEqual(set(lookup.CURRENT_IID), {"wgs1", "imp1"})
+        lookup = MODULE.build_manifest_lookup(manifest, ["source_a_id", "source_b_id"])
+        self.assertEqual(set(lookup.CURRENT_IID), {"sample1", "sample2"})
 
     def test_eta_squared_detects_complete_separation(self):
         frame = pd.DataFrame({"pc": [-1.0, -1.0, 1.0, 1.0], "group": ["A", "A", "B", "B"]})
