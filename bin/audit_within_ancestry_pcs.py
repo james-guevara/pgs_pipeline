@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -131,6 +132,18 @@ def main() -> None:
         joined[["IID", "source", *[c for c in categories if c != "source"], "missingness", *pc_columns]].to_csv(
             args.out_dir / "audit_participants.tsv", sep="\t", index=False
         )
+
+    metadata = {
+        "pcs": str(args.pcs.resolve()),
+        "sample_qc": str(args.sample_qc.resolve()),
+        "sample_manifest": str(args.sample_manifest.resolve()),
+        "manifest_id_columns": args.manifest_id_columns.split(","),
+        "categorical_covariates": categories,
+        "participants": len(joined),
+        "manifest_matched": int(joined.CURRENT_IID.notna().sum()),
+        "participant_table_written": args.write_participant_table,
+    }
+    (args.out_dir / "run_metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
 
     heatmap = pd.DataFrame(summary).pivot(index="covariate", columns="pc", values="eta_squared")
     heatmap = heatmap.reindex(columns=[pc.removesuffix("_AVG") for pc in pc_columns])
