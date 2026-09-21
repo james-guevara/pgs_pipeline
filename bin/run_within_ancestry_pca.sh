@@ -75,13 +75,11 @@ for ancestry in AFR AMR EAS EUR SAS; do
     fi
 
     ld_sample_override=()
-    frequency_sample_override=()
     if (( assigned < 50 )); then
         # PLINK refuses LD estimation below 50 samples by default. The user has
         # explicitly requested best-effort PCs for these groups; their outputs
         # remain marked unreliable_small_sample.
         ld_sample_override=(--bad-ld)
-        frequency_sample_override=(--bad-freqs)
     fi
 
     plink2 \
@@ -119,6 +117,18 @@ for ancestry in AFR AMR EAS EUR SAS; do
           "$ancestry" "$assigned" "$unrelated" "$pruned_variants" >> "$status_file"
         continue
     fi
+
+    # KING filtering can take a group below PLINK's 50-sample frequency
+    # guard even when its initial membership was large enough.
+    frequency_sample_override=()
+    if (( unrelated < 50 )); then
+        frequency_sample_override=(--bad-freqs)
+    fi
+    if (( unrelated < min_samples || unrelated < 50 )); then
+        reliability=unreliable_small_sample
+    fi
+    printf 'ancestry\tassigned_samples\tunrelated_training_samples\treliability_threshold\treliability\n%s\t%d\t%d\t%d\t%s\n' \
+      "$ancestry" "$assigned" "$unrelated" "$min_samples" "$reliability" > "$group_dir/reliability.tsv"
 
     group_pcs=$num_pcs
     if (( group_pcs >= unrelated )); then
