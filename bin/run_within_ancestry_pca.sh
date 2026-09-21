@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 12 ]]; then
-    echo "usage: $0 PFILE ANCESTRY_TSV MIN_SAMPLES NUM_PCS KING_CUTOFF LD_WINDOW LD_STEP LD_R2 MAF CPUS MEMORY_MB OUTPUT_DIR" >&2
+if [[ $# -ne 12 && $# -ne 13 ]]; then
+    echo "usage: $0 PFILE ANCESTRY_TSV MIN_SAMPLES NUM_PCS KING_CUTOFF LD_WINDOW LD_STEP LD_R2 MAF CPUS MEMORY_MB OUTPUT_DIR [vzs]" >&2
     exit 2
 fi
 
@@ -18,6 +18,13 @@ maf=$9
 cpus=${10}
 memory_mb=${11}
 output_dir=${12}
+pfile_args=("$pfile")
+if [[ $# -eq 13 ]]; then
+    [[ -z ${13} || ${13} == vzs ]] || { echo 'Invalid PVAR modifier' >&2; exit 2; }
+    [[ -z ${13} ]] || pfile_args+=(vzs)
+elif [[ -f ${pfile}.pvar.zst && ! -f ${pfile}.pvar ]]; then
+    pfile_args+=(vzs)
+fi
 
 mkdir -p "$output_dir"
 status_file="$output_dir/status.tsv"
@@ -83,7 +90,7 @@ for ancestry in AFR AMR EAS EUR SAS; do
     fi
 
     plink2 \
-      --pfile "$pfile" \
+      --pfile "${pfile_args[@]}" \
       --keep "$keep_file" \
       --maf "$maf" \
       "${ld_sample_override[@]}" \
@@ -101,7 +108,7 @@ for ancestry in AFR AMR EAS EUR SAS; do
     fi
 
     plink2 \
-      --pfile "$pfile" \
+      --pfile "${pfile_args[@]}" \
       --keep "$keep_file" \
       --extract "$group_dir/prune.prune.in" \
       --king-cutoff "$king_cutoff" \
@@ -135,7 +142,7 @@ for ancestry in AFR AMR EAS EUR SAS; do
         group_pcs=$(( unrelated - 1 ))
     fi
     plink2 \
-      --pfile "$pfile" \
+      --pfile "${pfile_args[@]}" \
       --keep "$group_dir/king.king.cutoff.in.id" \
       --extract "$group_dir/prune.prune.in" \
       --freq counts \
@@ -169,7 +176,7 @@ for ancestry in AFR AMR EAS EUR SAS; do
     fi
 
     plink2 \
-      --pfile "$pfile" \
+      --pfile "${pfile_args[@]}" \
       --keep "$group_dir/king.king.cutoff.in.id" \
       --extract "$group_dir/training_polymorphic.ids" \
       "${frequency_sample_override[@]}" \
@@ -195,7 +202,7 @@ for ancestry in AFR AMR EAS EUR SAS; do
     )
 
     plink2 \
-      --pfile "$pfile" \
+      --pfile "${pfile_args[@]}" \
       --keep "$keep_file" \
       --extract "$group_dir/training_polymorphic.ids" \
       --read-freq "$group_dir/training.acount" \

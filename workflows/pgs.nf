@@ -1,5 +1,28 @@
 nextflow.enable.dsl=2
 
+process READ_PVAR_METADATA {
+    tag 'variant metadata'
+    label 'small'
+
+    input:
+    path source_pvar, stageAs: 'source/*'
+
+    output:
+    path 'metadata.pvar', emit: pvar
+
+    script:
+    if (source_pvar.toString().endsWith('.pvar.zst')) {
+        """
+        plink2 --zst-decompress '${source_pvar}' > metadata.pvar
+        """
+    } else {
+        """
+        ln -s '${source_pvar}' metadata.pvar
+        """
+    }
+}
+
+
 def chromosomeList(value) {
     def text = value.toString()
     if (text ==~ /\d+\.\.\d+/) {
@@ -196,14 +219,15 @@ process MISSINGNESS_QC {
 
     script:
     def inputPrefix = pgen.baseName
+    def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
-    plink2 --pfile ${inputPrefix} --missing --out pass1 --threads ${task.cpus} --memory ${memMb}
+    plink2 --pfile ${inputPrefix} ${vzs} --missing --out pass1 --threads ${task.cpus} --memory ${memMb}
     awk 'NR>1 && ${'$'}5>${params.variant_miss} {print ${'$'}2}' pass1.vmiss > fail_variants.txt
-    plink2 --pfile ${inputPrefix} --exclude fail_variants.txt --missing --out pass2 --threads ${task.cpus} --memory ${memMb}
+    plink2 --pfile ${inputPrefix} ${vzs} --exclude fail_variants.txt --missing --out pass2 --threads ${task.cpus} --memory ${memMb}
     awk 'NR>1 && ${'$'}4>${params.sample_miss} {print ${'$'}1, ${'$'}2}' pass2.smiss > fail_samples.txt
     plink2 \
-      --pfile ${inputPrefix} \
+      --pfile ${inputPrefix} ${vzs} \
       --exclude fail_variants.txt \
       --remove fail_samples.txt \
       --make-pgen \
@@ -227,9 +251,10 @@ process SUMMARY_QC {
 
     script:
     def inputPrefix = pgen.baseName
+    def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
-    plink2 --pfile ${inputPrefix} --missing --hardy --freq \
+    plink2 --pfile ${inputPrefix} ${vzs} --missing --hardy --freq \
       --out ${params.cohort} --threads ${task.cpus} --memory ${memMb}
     printf 'Metric\\tCount\\nSamples\\t%s\\nVariants\\t%s\\n' \
       "${'$'}(awk 'END {print NR-1}' ${params.cohort}.smiss)" \
@@ -251,10 +276,11 @@ process SUMMARY_QC_DIRECT {
 
     script:
     def inputPrefix = pgen.toString().replaceFirst(/[.]pgen$/, '')
+    def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
     test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
-    plink2 --pfile '${inputPrefix}' --missing --hardy --freq \
+    plink2 --pfile '${inputPrefix}' ${vzs} --missing --hardy --freq \
       --out ${params.cohort} --threads ${task.cpus} --memory ${memMb}
     printf 'Metric\\tCount\\nSamples\\t%s\\nVariants\\t%s\\n' \
       "${'$'}(awk 'END {print NR-1}' ${params.cohort}.smiss)" \
@@ -271,23 +297,26 @@ process PREPARE_SCORE_PFILE {
     tuple path(pgen), path(pvar), path(psam)
     path rsid_map
 
+    path metadata_pvar, stageAs: 'metadata/*'
+
     output:
     tuple path('score_input.pgen'), path('score_input.pvar'), path('score_input.psam'), emit: pfile
     path 'score_input_filter_summary.tsv', emit: summary
 
     script:
     def prefix = pgen.baseName
+    def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
-    before=${'$'}(awk '!/^#/ {n++} END {print n+0}' ${pvar})
+    before=${'$'}(awk '!/^#/ {n++} END {print n+0}' '${metadata_pvar}')
     awk 'NF >= 2 && ${'$'}1 !~ /^#/ {print ${'$'}2}' '${rsid_map}' > mapped_rsid_ids.txt
     if [ -s mapped_rsid_ids.txt ]; then
-      plink2 --pfile '${prefix}' --extract mapped_rsid_ids.txt \
+      plink2 --pfile '${prefix}' ${vzs} --extract mapped_rsid_ids.txt \
         --update-name '${rsid_map}' 2 1 --maf ${params.maf} --make-pgen \
         --out score_input --threads ${task.cpus} --memory ${memMb}
       mapping=applied
     else
-      plink2 --pfile '${prefix}' --maf ${params.maf} --make-pgen \
+      plink2 --pfile '${prefix}' ${vzs} --maf ${params.maf} --make-pgen \
         --out score_input --threads ${task.cpus} --memory ${memMb}
       mapping=not_requested
     fi
@@ -306,24 +335,27 @@ process PREPARE_SCORE_PFILE_DIRECT {
     tuple val(pgen), val(pvar), val(psam)
     path rsid_map
 
+    path metadata_pvar, stageAs: 'metadata/*'
+
     output:
     tuple path('score_input.pgen'), path('score_input.pvar'), path('score_input.psam'), emit: pfile
     path 'score_input_filter_summary.tsv', emit: summary
 
     script:
     def prefix = pgen.toString().replaceFirst(/[.]pgen$/, '')
+    def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
     test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
-    before=${'$'}(awk '!/^#/ {n++} END {print n+0}' '${pvar}')
+    before=${'$'}(awk '!/^#/ {n++} END {print n+0}' '${metadata_pvar}')
     awk 'NF >= 2 && ${'$'}1 !~ /^#/ {print ${'$'}2}' '${rsid_map}' > mapped_rsid_ids.txt
     if [ -s mapped_rsid_ids.txt ]; then
-      plink2 --pfile '${prefix}' --extract mapped_rsid_ids.txt \
+      plink2 --pfile '${prefix}' ${vzs} --extract mapped_rsid_ids.txt \
         --update-name '${rsid_map}' 2 1 --maf ${params.maf} --make-pgen \
         --out score_input --threads ${task.cpus} --memory ${memMb}
       mapping=applied
     else
-      plink2 --pfile '${prefix}' --maf ${params.maf} --make-pgen \
+      plink2 --pfile '${prefix}' ${vzs} --maf ${params.maf} --make-pgen \
         --out score_input --threads ${task.cpus} --memory ${memMb}
       mapping=not_requested
     fi
@@ -348,10 +380,11 @@ process SCORE_TRAIT {
 
     script:
     def inputPrefix = pgen.baseName
+    def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
     plink2 \
-      --pfile ${inputPrefix} \
+      --pfile ${inputPrefix} ${vzs} \
       --score ${weights} ${id_col} ${allele_col} ${effect_col} header center list-variants no-mean-imputation \
       --out ${trait} \
       --threads ${task.cpus} \
@@ -383,11 +416,12 @@ process SCORE_TRAIT_DIRECT {
 
     script:
     def inputPrefix = pgen.toString().replaceFirst(/[.]pgen$/, '')
+    def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
     test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
     plink2 \
-      --pfile '${inputPrefix}' \
+      --pfile '${inputPrefix}' ${vzs} \
       --score ${weights} ${id_col} ${allele_col} ${effect_col} header center list-variants no-mean-imputation \
       --out ${trait} \
       --threads ${task.cpus} \
@@ -432,8 +466,8 @@ process EXPLAIN_SCORE_MATCHING {
 
     input:
     tuple val(trait), path(weights), val(id_col), val(allele_col), val(effect_col), path(matched_vars)
-    path source_pvar
-    path score_pvar
+    path source_pvar, stageAs: 'source/*'
+    path score_pvar, stageAs: 'score/*'
     path rsid_map
     path explanation_script
 
@@ -498,6 +532,8 @@ process HARMONIZE_PCA_PANEL {
     path panel
     path harmonizer
 
+    path metadata_pvar, stageAs: 'metadata/*'
+
     output:
     tuple path(pgen), path(pvar), path(psam), path('usable_cohort_ids.txt'),
       path('rename_to_panel_ids.tsv'), path('reference_alleles.tsv'), emit: harmonized_inputs
@@ -508,7 +544,7 @@ process HARMONIZE_PCA_PANEL {
     """
     python ${harmonizer} \
       --panel ${panel} \
-      --cohort-pvar ${pvar} \
+      --cohort-pvar '${metadata_pvar}' \
       --min-overlap ${params.min_pca_variant_overlap} \
       --output-dir .
     """
@@ -525,6 +561,8 @@ process HARMONIZE_PCA_PANEL_DIRECT {
     path panel
     path harmonizer
 
+    path metadata_pvar, stageAs: 'metadata/*'
+
     output:
     tuple val(pgen), val(pvar), val(psam), path('usable_cohort_ids.txt'),
       path('rename_to_panel_ids.tsv'), path('reference_alleles.tsv'), emit: harmonized_inputs
@@ -536,7 +574,7 @@ process HARMONIZE_PCA_PANEL_DIRECT {
     test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
     python ${harmonizer} \
       --panel ${panel} \
-      --cohort-pvar '${pvar}' \
+      --cohort-pvar '${metadata_pvar}' \
       --min-overlap ${params.min_pca_variant_overlap} \
       --output-dir .
     """
@@ -583,10 +621,11 @@ process PREPARE_PCA_PFILE {
 
     script:
     def inputPrefix = pgen.baseName
+    def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
     plink2 \
-      --pfile ${inputPrefix} \
+      --pfile ${inputPrefix} ${vzs} \
       --extract ${usable_ids} \
       --make-pgen \
       --out extracted \
@@ -623,11 +662,12 @@ process PREPARE_PCA_PFILE_DIRECT {
 
     script:
     def inputPrefix = pgen.toString().replaceFirst(/[.]pgen$/, '')
+    def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
     test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
     plink2 \
-      --pfile '${inputPrefix}' \
+      --pfile '${inputPrefix}' ${vzs} \
       --extract ${usable_ids} \
       --make-pgen \
       --out extracted \
@@ -668,11 +708,12 @@ process PROJECT_GLOBAL_PCS {
 
     script:
     def inputPrefix = pgen.baseName
+    def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
     def lastPc = 5 + params.num_pcs.toInteger()
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
     plink2 \
-      --pfile ${inputPrefix} \
+      --pfile ${inputPrefix} ${vzs} \
       --read-freq ${allele_frequencies} \
       --score ${loadings} 2 5 header-read no-mean-imputation variance-standardize list-variants \
       --score-col-nums 6-${lastPc} \
@@ -724,6 +765,7 @@ process WITHIN_ANCESTRY_PCA {
 
     script:
     def inputPrefix = pgen.baseName
+    def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
     bash ${within_ancestry_script} \
@@ -738,7 +780,8 @@ process WITHIN_ANCESTRY_PCA {
       ${params.within_ancestry_maf} \
       ${task.cpus} \
       ${memMb} \
-      within_ancestry
+      within_ancestry \
+      '${vzs}'
     """
 }
 
@@ -757,6 +800,7 @@ process WITHIN_ANCESTRY_PCA_DIRECT {
 
     script:
     def inputPrefix = pgen.toString().replaceFirst(/[.]pgen$/, '')
+    def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
     test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
@@ -772,7 +816,8 @@ process WITHIN_ANCESTRY_PCA_DIRECT {
       ${params.within_ancestry_maf} \
       ${task.cpus} \
       ${memMb} \
-      within_ancestry
+      within_ancestry \
+      '${vzs}'
     """
 }
 
@@ -803,16 +848,31 @@ workflow PGS_WORKFLOW {
 
     if (params.input_pfile) {
         def pfilePrefix = params.input_pfile.toString()
+        def format = params.input_pvar_format ?: 'auto'
+        if (!(format in ['auto', 'pvar', 'pvar.zst'])) {
+            error '--input_pvar_format must be auto, pvar, or pvar.zst'
+        }
+        if (format == 'auto') {
+            def plain = file("${pfilePrefix}.pvar").exists()
+            def compressed = file("${pfilePrefix}.pvar.zst").exists()
+            if (plain && compressed) {
+                error 'Both .pvar and .pvar.zst exist; select --input_pvar_format explicitly'
+            }
+            // Direct inputs may only be visible to workers. In that case an
+            // explicit format selects compressed input; plain remains compatible.
+            format = compressed ? 'pvar.zst' : 'pvar'
+        }
+        def inputPvar = "${pfilePrefix}.${format}"
         if (directPfileEnabled) {
             qcPfile = Channel.value(tuple(
                 "${pfilePrefix}.pgen",
-                "${pfilePrefix}.pvar",
+                inputPvar,
                 "${pfilePrefix}.psam"
             ))
         } else {
             qcPfile = Channel.value(tuple(
                 file("${pfilePrefix}.pgen", checkIfExists: true),
-                file("${pfilePrefix}.pvar", checkIfExists: true),
+                file(inputPvar, checkIfExists: true),
                 file("${pfilePrefix}.psam", checkIfExists: true)
             ))
         }
@@ -848,6 +908,10 @@ workflow PGS_WORKFLOW {
         CONCAT_CHROMOSOMES(allChromosomeFiles)
         MISSINGNESS_QC(CONCAT_CHROMOSOMES.out.pfile)
         qcPfile = MISSINGNESS_QC.out.pfile
+    }
+
+    if (pcaEnabled || scoresEnabled) {
+        READ_PVAR_METADATA(qcPfile.map { pgen, pvar, psam -> pvar })
     }
 
     if (summaryQcEnabled) {
@@ -902,11 +966,11 @@ workflow PGS_WORKFLOW {
         pcaClassifierMetadataCh = validatedReference.map { referenceId, build, panelFile, refFrequencies, refLoadings, refClassifier, metadata, checksums, validation -> metadata }
 
         if (directPfileEnabled) {
-            HARMONIZE_PCA_PANEL_DIRECT(qcPfile, pcaPanelCh, Channel.value(file("${moduleDir}/../bin/harmonize_pca_panel.py")))
+            HARMONIZE_PCA_PANEL_DIRECT(qcPfile, pcaPanelCh, Channel.value(file("${moduleDir}/../bin/harmonize_pca_panel.py")), READ_PVAR_METADATA.out.pvar)
             PREPARE_PCA_PFILE_DIRECT(HARMONIZE_PCA_PANEL_DIRECT.out.harmonized_inputs)
             pcaInput = PREPARE_PCA_PFILE_DIRECT.out.pfile
         } else {
-            HARMONIZE_PCA_PANEL(qcPfile, pcaPanelCh, Channel.value(file("${moduleDir}/../bin/harmonize_pca_panel.py")))
+            HARMONIZE_PCA_PANEL(qcPfile, pcaPanelCh, Channel.value(file("${moduleDir}/../bin/harmonize_pca_panel.py")), READ_PVAR_METADATA.out.pvar)
             PREPARE_PCA_PFILE(HARMONIZE_PCA_PANEL.out.harmonized_inputs)
             pcaInput = PREPARE_PCA_PFILE.out.pfile
         }
@@ -959,11 +1023,11 @@ workflow PGS_WORKFLOW {
             checkIfExists: true
         ))
         if (directPfileEnabled) {
-            PREPARE_SCORE_PFILE_DIRECT(qcPfile, scoreRsidMap)
+            PREPARE_SCORE_PFILE_DIRECT(qcPfile, scoreRsidMap, READ_PVAR_METADATA.out.pvar)
             scorePfile = PREPARE_SCORE_PFILE_DIRECT.out.pfile
             scoreInputSummaryResults = PREPARE_SCORE_PFILE_DIRECT.out.summary
         } else {
-            PREPARE_SCORE_PFILE(qcPfile, scoreRsidMap)
+            PREPARE_SCORE_PFILE(qcPfile, scoreRsidMap, READ_PVAR_METADATA.out.pvar)
             scorePfile = PREPARE_SCORE_PFILE.out.pfile
             scoreInputSummaryResults = PREPARE_SCORE_PFILE.out.summary
         }
@@ -975,7 +1039,7 @@ workflow PGS_WORKFLOW {
         scoredResults = SCORE_TRAIT.out.scored
         matchedByTrait = SCORE_TRAIT.out.matched
         explanationInputs = weights.join(matchedByTrait)
-        sourcePvar = qcPfile.map { pgen, pvar, psam -> pvar }
+        sourcePvar = READ_PVAR_METADATA.out.pvar
         preparedPvar = scorePfile.map { pgen, pvar, psam -> pvar }
         EXPLAIN_SCORE_MATCHING(
             explanationInputs,

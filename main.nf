@@ -4,6 +4,7 @@ nextflow.enable.dsl=2
 params.vcfs = null
 params.rsid_maps = null
 params.input_pfile = null
+params.input_pvar_format = 'auto'
 params.chromosomes = '1..22'
 params.cohort = 'cohort'
 params.genome_build = 'GRCh38'
