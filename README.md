@@ -161,7 +161,7 @@ nextflow run main.nf -profile slurm \
 ```
 
 To run scoring and/or PCA from an existing QCed PLINK 2 dataset, provide its
-prefix (the path before `.pgen`, `.pvar`, and `.psam`). This bypasses VCF
+prefix (the path before `.pgen`, `.pvar` or `.pvar.zst`, and `.psam`). This bypasses VCF
 conversion, chromosome concatenation, and missingness filtering:
 
 ```bash
@@ -172,6 +172,20 @@ nextflow run main.nf -profile slurm \
   --shared_work_dir /shared/nextflow-work \
   --outdir /shared/results/run-001
 ```
+
+Plain and compressed PVAR inputs are supported. The default
+`--input_pvar_format auto` detects the existing suffix. If both suffixes exist,
+select `--input_pvar_format pvar` or `--input_pvar_format pvar.zst` explicitly.
+For worker-only paths invisible to the controller, specify the format explicitly
+with direct inputs; otherwise auto retains the legacy plain-PVAR assumption.
+
+PLINK reads compressed metadata natively using `--pfile <prefix> vzs`, including
+within-ancestry PCA. A shared `READ_PVAR_METADATA` task uses PLINK's native
+`--zst-decompress` to materialize only the variant table for Python panel matching
+and score explanations (plain inputs use a symlink). This stays in Nextflow
+work; no genotype conversion is needed for metadata access. The original base
+fileset remains untouched. Derived scoring/PCA filesets retain their existing
+plain-PVAR representation and scientific filtering policies.
 
 The input is treated as already QCed; use the VCF path when the pipeline should
 apply its own preprocessing and missingness thresholds.
@@ -225,6 +239,7 @@ Apptainer/Singularity systems, a site config may instead point
 |---|---:|---|
 | `chromosomes` | `1..22` | Inclusive range or comma-separated list |
 | `input_pfile` | unset | Existing QCed PLINK 2 prefix; bypasses VCF preprocessing |
+| `input_pvar_format` | `auto` | Input metadata suffix: `auto`, `pvar`, or `pvar.zst` |
 | `cohort` | `cohort` | Output prefix |
 | `genome_build` | `GRCh38` | Cohort genome build; must match the PCA reference |
 | `mac` | `10` | Minimum allele count |
