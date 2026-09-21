@@ -41,6 +41,16 @@ class NextflowStructureTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("* PREVIEW *", result.stdout + result.stderr)
 
+    def test_component_assets_resolve_beside_module_not_calling_project(self):
+        # An importing parent has its own projectDir and no PGS bin/resources.
+        import re
+        source = (ROOT / "workflows" / "pgs.nf").read_text()
+        self.assertNotIn("${projectDir}", source)
+        assets = re.findall(r'\$\{moduleDir\}/\.\./([^"\s]+)', source)
+        self.assertGreaterEqual(len(assets), 10)
+        for asset in assets:
+            self.assertTrue((ROOT / asset).is_file(), asset)
+
     def test_named_workflow_exposes_composition_outputs(self):
         source = (ROOT / "workflows" / "pgs.nf").read_text()
         self.assertIn("workflow PGS_WORKFLOW", source)
