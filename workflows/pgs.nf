@@ -5,7 +5,7 @@ process READ_PVAR_METADATA {
     label 'small'
 
     input:
-    path source_pvar
+    path source_pvar, stageAs: 'source/*'
 
     output:
     path 'metadata.pvar', emit: pvar
@@ -297,7 +297,7 @@ process PREPARE_SCORE_PFILE {
     tuple path(pgen), path(pvar), path(psam)
     path rsid_map
 
-    path metadata_pvar
+    path metadata_pvar, stageAs: 'metadata/*'
 
     output:
     tuple path('score_input.pgen'), path('score_input.pvar'), path('score_input.psam'), emit: pfile
@@ -335,7 +335,7 @@ process PREPARE_SCORE_PFILE_DIRECT {
     tuple val(pgen), val(pvar), val(psam)
     path rsid_map
 
-    path metadata_pvar
+    path metadata_pvar, stageAs: 'metadata/*'
 
     output:
     tuple path('score_input.pgen'), path('score_input.pvar'), path('score_input.psam'), emit: pfile
@@ -466,8 +466,8 @@ process EXPLAIN_SCORE_MATCHING {
 
     input:
     tuple val(trait), path(weights), val(id_col), val(allele_col), val(effect_col), path(matched_vars)
-    path source_pvar
-    path score_pvar
+    path source_pvar, stageAs: 'source/*'
+    path score_pvar, stageAs: 'score/*'
     path rsid_map
     path explanation_script
 
@@ -532,7 +532,7 @@ process HARMONIZE_PCA_PANEL {
     path panel
     path harmonizer
 
-    path metadata_pvar
+    path metadata_pvar, stageAs: 'metadata/*'
 
     output:
     tuple path(pgen), path(pvar), path(psam), path('usable_cohort_ids.txt'),
@@ -561,7 +561,7 @@ process HARMONIZE_PCA_PANEL_DIRECT {
     path panel
     path harmonizer
 
-    path metadata_pvar
+    path metadata_pvar, stageAs: 'metadata/*'
 
     output:
     tuple val(pgen), val(pvar), val(psam), path('usable_cohort_ids.txt'),

@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "case": "compressed-staged",
+      "identical_scientific_artifacts": 70,
+      "status": "PASS"
+    },
+    {
+      "case": "compressed-direct",
+      "identical_scientific_artifacts": 70,
+      "status": "PASS"
+    }
+  ]
+}

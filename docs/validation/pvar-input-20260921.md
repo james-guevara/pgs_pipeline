@@ -46,3 +46,18 @@ This verifies input-storage equivalence; it does not independently validate
 ancestry classifier accuracy or the scientific appropriateness of QC policy.
 The original base fileset remains untouched; one work-directory metadata view
 is produced for Python readers, while all genotype reads use native PLINK.
+
+## Review regression: input prefix `metadata`
+
+Source and helper PVARs are now staged in separate subdirectories so a valid
+`metadata.pvar` input cannot collide with the metadata task's output or with
+helper metadata in downstream tasks. A local regression runs the real metadata
+task with this filename, verifies content and unchanged source, then verifies
+Nextflow resume. Component tests: 28 passed, one existing macOS Bash skip.
+
+Slurm job 54386222 repeated all three full PGS/PCA cases with the `metadata`
+prefix, without resume. All 70 scientific artifacts again matched exactly
+between plain, staged compressed, and direct compressed inputs. Results are in
+`pvar-metadata-prefix-20260921.json`; complete evidence is retained at:
+
+`/expanse/projects/sebat1/j3guevar/integrated_genomics_pipeline/experiments/pgs-vzs-metadata-20260921`
