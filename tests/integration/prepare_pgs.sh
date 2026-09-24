@@ -22,7 +22,7 @@ plink2 --vcf input.vcf --make-pgen vzs --out base --threads 1 --memory 1500
 run_case() {
  local name=$1; shift
  mkdir -p "$root/$name"; cd "$root/$name"
- nextflow run "$repo/main.nf" -c "$config" -ansi-log false -work-dir "$PWD/work" \
+ nextflow run "${PGS_ENTRYPOINT:-$repo/main.nf}" -c "$config" -ansi-log false -work-dir "$PWD/work" \
   --outdir "$PWD/results" --report_dir "$PWD/info" --run_summary_qc false --cohort fixture "$@"
 }
 base="$root/fixture/base"; map="$root/fixture/rsid.map"; scores="$root/fixture/scores.tsv"
