@@ -291,7 +291,7 @@ process SUMMARY_QC_DIRECT {
 process PREPARE_SCORE_PFILE {
     tag params.cohort
     label 'large'
-    publishDir "${params.outdir}/04_score_input", mode: 'copy'
+    publishDir "${params.outdir}/04_score_input", mode: params.plink_publish_mode ?: 'copy', pattern: 'score_input*'
 
     input:
     tuple path(pgen), path(pvar), path(psam)
@@ -300,27 +300,39 @@ process PREPARE_SCORE_PFILE {
     path metadata_pvar, stageAs: 'metadata/*'
 
     output:
-    tuple path('score_input.pgen'), path('score_input.pvar'), path('score_input.psam'), emit: pfile
+    tuple path('score_input.pgen'), path('score_input.pvar.zst'), path('score_input.psam'), emit: pfile
     path 'score_input_filter_summary.tsv', emit: summary
+    path 'score_input_provenance.json', emit: provenance
+    path 'score_input_rsid_map.sha256', emit: map_checksum
+    path 'score_metadata.pvar', emit: metadata
 
     script:
     def prefix = pgen.baseName
     def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
+    def provenance = groovy.json.JsonOutput.toJson([
+        cohort: params.cohort, genome_build: params.genome_build,
+        source_input: params.input_pfile ?: params.vcfs,
+        rsid_map: params.score_rsid_map ?: null, maf: params.maf,
+        container: task.container, pvar_format: 'pvar.zst'
+    ]).bytes.encodeBase64().toString()
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
+    printf '%s' '${provenance}' | base64 -d > score_input_provenance.json
+    sha256sum '${rsid_map}' > score_input_rsid_map.sha256
     before=${'$'}(awk '!/^#/ {n++} END {print n+0}' '${metadata_pvar}')
     awk 'NF >= 2 && ${'$'}1 !~ /^#/ {print ${'$'}2}' '${rsid_map}' > mapped_rsid_ids.txt
     if [ -s mapped_rsid_ids.txt ]; then
       plink2 --pfile '${prefix}' ${vzs} --extract mapped_rsid_ids.txt \
-        --update-name '${rsid_map}' 2 1 --maf ${params.maf} --make-pgen \
+        --update-name '${rsid_map}' 2 1 --maf ${params.maf} --make-pgen vzs \
         --out score_input --threads ${task.cpus} --memory ${memMb}
       mapping=applied
     else
-      plink2 --pfile '${prefix}' ${vzs} --maf ${params.maf} --make-pgen \
+      plink2 --pfile '${prefix}' ${vzs} --maf ${params.maf} --make-pgen vzs \
         --out score_input --threads ${task.cpus} --memory ${memMb}
       mapping=not_requested
     fi
-    after=${'$'}(awk '!/^#/ {n++} END {print n+0}' score_input.pvar)
+    plink2 --zst-decompress score_input.pvar.zst > score_metadata.pvar
+    after=${'$'}(awk '!/^#/ {n++} END {print n+0}' score_metadata.pvar)
     printf 'metric\tvalue\nrsid_mapping\t%s\nmaf_threshold\t%s\nvariants_before\t%s\nvariants_after\t%s\n' \
       "${'$'}mapping" '${params.maf}' "${'$'}before" "${'$'}after" > score_input_filter_summary.tsv
     """
@@ -329,7 +341,7 @@ process PREPARE_SCORE_PFILE {
 process PREPARE_SCORE_PFILE_DIRECT {
     tag params.cohort
     label 'large'
-    publishDir "${params.outdir}/04_score_input", mode: 'copy'
+    publishDir "${params.outdir}/04_score_input", mode: params.plink_publish_mode ?: 'copy', pattern: 'score_input*'
 
     input:
     tuple val(pgen), val(pvar), val(psam)
@@ -338,28 +350,40 @@ process PREPARE_SCORE_PFILE_DIRECT {
     path metadata_pvar, stageAs: 'metadata/*'
 
     output:
-    tuple path('score_input.pgen'), path('score_input.pvar'), path('score_input.psam'), emit: pfile
+    tuple path('score_input.pgen'), path('score_input.pvar.zst'), path('score_input.psam'), emit: pfile
     path 'score_input_filter_summary.tsv', emit: summary
+    path 'score_input_provenance.json', emit: provenance
+    path 'score_input_rsid_map.sha256', emit: map_checksum
+    path 'score_metadata.pvar', emit: metadata
 
     script:
     def prefix = pgen.toString().replaceFirst(/[.]pgen$/, '')
     def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
+    def provenance = groovy.json.JsonOutput.toJson([
+        cohort: params.cohort, genome_build: params.genome_build,
+        source_input: params.input_pfile ?: params.vcfs,
+        rsid_map: params.score_rsid_map ?: null, maf: params.maf,
+        container: task.container, pvar_format: 'pvar.zst'
+    ]).bytes.encodeBase64().toString()
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
     """
     test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
+    printf '%s' '${provenance}' | base64 -d > score_input_provenance.json
+    sha256sum '${rsid_map}' > score_input_rsid_map.sha256
     before=${'$'}(awk '!/^#/ {n++} END {print n+0}' '${metadata_pvar}')
     awk 'NF >= 2 && ${'$'}1 !~ /^#/ {print ${'$'}2}' '${rsid_map}' > mapped_rsid_ids.txt
     if [ -s mapped_rsid_ids.txt ]; then
       plink2 --pfile '${prefix}' ${vzs} --extract mapped_rsid_ids.txt \
-        --update-name '${rsid_map}' 2 1 --maf ${params.maf} --make-pgen \
+        --update-name '${rsid_map}' 2 1 --maf ${params.maf} --make-pgen vzs \
         --out score_input --threads ${task.cpus} --memory ${memMb}
       mapping=applied
     else
-      plink2 --pfile '${prefix}' ${vzs} --maf ${params.maf} --make-pgen \
+      plink2 --pfile '${prefix}' ${vzs} --maf ${params.maf} --make-pgen vzs \
         --out score_input --threads ${task.cpus} --memory ${memMb}
       mapping=not_requested
     fi
-    after=${'$'}(awk '!/^#/ {n++} END {print n+0}' score_input.pvar)
+    plink2 --zst-decompress score_input.pvar.zst > score_metadata.pvar
+    after=${'$'}(awk '!/^#/ {n++} END {print n+0}' score_metadata.pvar)
     printf 'metric\tvalue\nrsid_mapping\t%s\nmaf_threshold\t%s\nvariants_before\t%s\nvariants_after\t%s\n' \
       "${'$'}mapping" '${params.maf}' "${'$'}before" "${'$'}after" > score_input_filter_summary.tsv
     """
@@ -825,9 +849,12 @@ workflow PGS_WORKFLOW {
     main:
     def skipRsid = flagEnabled(params.skip_rsid_annotation)
     def directInputsEnabled = flagEnabled(params.direct_inputs) || flagEnabled(params.fsx_direct)
-    def directPfileEnabled = params.input_pfile && directInputsEnabled
+    def suppliedPfile = params.input_pfile ?: params.input_pgs_pfile
+    def preparedInput = params.input_pgs_pfile != null
+    def directPfileEnabled = suppliedPfile && directInputsEnabled
     def pcaEnabled = flagEnabled(params.run_pca)
     def scoresEnabled = flagEnabled(params.run_scores)
+    def preparationEnabled = flagEnabled(params.prepare_pgs) || (scoresEnabled && !preparedInput)
     def summaryQcEnabled = flagEnabled(params.run_summary_qc)
     def globalPcResults = Channel.empty()
     def ancestryResults = Channel.empty()
@@ -838,16 +865,31 @@ workflow PGS_WORKFLOW {
     def analysisDatasetResults = Channel.empty()
     def analysisDictionaryResults = Channel.empty()
 
+    if (params.input_pfile && preparedInput) {
+        error '--input_pfile and --input_pgs_pfile are mutually exclusive'
+    }
+    if (preparedInput && (flagEnabled(params.prepare_pgs) || params.score_rsid_map || params.vcfs)) {
+        error '--input_pgs_pfile cannot be combined with --prepare_pgs, --score_rsid_map, or --vcfs; it is already prepared'
+    }
+    if (preparedInput && pcaEnabled) {
+        error 'PCA requires the base --input_pfile, not the filtered --input_pgs_pfile'
+    }
+    if (!((params.plink_publish_mode ?: 'copy') in ['copy', 'link', 'symlink', 'rellink'])) {
+        error '--plink_publish_mode must be copy, link, symlink, or rellink'
+    }
+    if (scoresEnabled && !params.score_sheet) {
+        error '--score_sheet is required when --run_scores is true'
+    }
     if (pcaEnabled && !params.pca_reference_sheet) {
         error '--pca_reference_sheet is required when --run_pca is true'
     }
 
-    if (!params.input_pfile && (!params.vcfs || (!params.rsid_maps && !skipRsid))) {
+    if (!suppliedPfile && (!params.vcfs || (!params.rsid_maps && !skipRsid))) {
         error '--vcfs is required, and --rsid_maps is required unless --skip_rsid_annotation is true; alternatively provide --input_pfile with a QCed PLINK 2 prefix.'
     }
 
-    if (params.input_pfile) {
-        def pfilePrefix = params.input_pfile.toString()
+    if (suppliedPfile) {
+        def pfilePrefix = suppliedPfile.toString()
         def format = params.input_pvar_format ?: 'auto'
         if (!(format in ['auto', 'pvar', 'pvar.zst'])) {
             error '--input_pvar_format must be auto, pvar, or pvar.zst'
@@ -910,7 +952,7 @@ workflow PGS_WORKFLOW {
         qcPfile = MISSINGNESS_QC.out.pfile
     }
 
-    if (pcaEnabled || scoresEnabled) {
+    if (pcaEnabled || scoresEnabled || preparationEnabled) {
         READ_PVAR_METADATA(qcPfile.map { pgen, pvar, psam -> pvar })
     }
 
@@ -1000,10 +1042,32 @@ workflow PGS_WORKFLOW {
         }
     }
 
-    if (scoresEnabled) {
-        if (!params.score_sheet) {
-            error '--score_sheet is required when --run_scores is true'
+    if (preparationEnabled || scoresEnabled) {
+        scoreRsidMap = Channel.value(file(
+            params.score_rsid_map ?: "${moduleDir}/../resources/no_rsid_map.tsv",
+            checkIfExists: true
+        ))
+    }
+    if (preparationEnabled) {
+        if (directPfileEnabled) {
+            PREPARE_SCORE_PFILE_DIRECT(qcPfile, scoreRsidMap, READ_PVAR_METADATA.out.pvar)
+            scorePfile = PREPARE_SCORE_PFILE_DIRECT.out.pfile
+            scoreInputSummaryResults = PREPARE_SCORE_PFILE_DIRECT.out.summary
+            preparedMetadata = PREPARE_SCORE_PFILE_DIRECT.out.metadata
+        } else {
+            PREPARE_SCORE_PFILE(qcPfile, scoreRsidMap, READ_PVAR_METADATA.out.pvar)
+            scorePfile = PREPARE_SCORE_PFILE.out.pfile
+            scoreInputSummaryResults = PREPARE_SCORE_PFILE.out.summary
+            preparedMetadata = PREPARE_SCORE_PFILE.out.metadata
         }
+        scoreInputResults = scorePfile
+    } else if (preparedInput) {
+        scorePfile = qcPfile
+        scoreInputResults = scorePfile
+        if (scoresEnabled) preparedMetadata = READ_PVAR_METADATA.out.pvar
+    }
+
+    if (scoresEnabled) {
         weights = Channel.fromPath(params.score_sheet, checkIfExists: true)
             .splitCsv(header: true, sep: '\t', strip: true)
             .map { row ->
@@ -1018,29 +1082,21 @@ workflow PGS_WORKFLOW {
                     row.effect_col.toString().toInteger()
                 )
             }
-        scoreRsidMap = Channel.value(file(
-            params.score_rsid_map ?: "${moduleDir}/../resources/no_rsid_map.tsv",
-            checkIfExists: true
-        ))
-        if (directPfileEnabled) {
-            PREPARE_SCORE_PFILE_DIRECT(qcPfile, scoreRsidMap, READ_PVAR_METADATA.out.pvar)
-            scorePfile = PREPARE_SCORE_PFILE_DIRECT.out.pfile
-            scoreInputSummaryResults = PREPARE_SCORE_PFILE_DIRECT.out.summary
-        } else {
-            PREPARE_SCORE_PFILE(qcPfile, scoreRsidMap, READ_PVAR_METADATA.out.pvar)
-            scorePfile = PREPARE_SCORE_PFILE.out.pfile
-            scoreInputSummaryResults = PREPARE_SCORE_PFILE.out.summary
-        }
-        scoreInputResults = scorePfile
         scoreInputs = weights.combine(scorePfile).map { trait, weight, idCol, alleleCol, effectCol, pgen, pvar, psam ->
             tuple(trait, weight, idCol, alleleCol, effectCol, pgen, pvar, psam)
         }
-        SCORE_TRAIT(scoreInputs, Channel.value(file("${moduleDir}/../bin/summarize_score.awk")))
-        scoredResults = SCORE_TRAIT.out.scored
-        matchedByTrait = SCORE_TRAIT.out.matched
+        if (preparedInput && directPfileEnabled) {
+            SCORE_TRAIT_DIRECT(scoreInputs, Channel.value(file("${moduleDir}/../bin/summarize_score.awk")))
+            scoredResults = SCORE_TRAIT_DIRECT.out.scored
+            matchedByTrait = SCORE_TRAIT_DIRECT.out.matched
+        } else {
+            SCORE_TRAIT(scoreInputs, Channel.value(file("${moduleDir}/../bin/summarize_score.awk")))
+            scoredResults = SCORE_TRAIT.out.scored
+            matchedByTrait = SCORE_TRAIT.out.matched
+        }
         explanationInputs = weights.join(matchedByTrait)
         sourcePvar = READ_PVAR_METADATA.out.pvar
-        preparedPvar = scorePfile.map { pgen, pvar, psam -> pvar }
+        preparedPvar = preparedMetadata
         EXPLAIN_SCORE_MATCHING(
             explanationInputs,
             sourcePvar,
@@ -1073,6 +1129,7 @@ workflow PGS_WORKFLOW {
     emit:
     qc_pfile = qcPfile
     score_pfile = scoreInputResults
+    pgs_pfile = scoreInputResults
     score_input_summary = scoreInputSummaryResults
     combined_scores = combinedScoreResults
     global_pcs = globalPcResults

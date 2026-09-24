@@ -239,6 +239,9 @@ Apptainer/Singularity systems, a site config may instead point
 |---|---:|---|
 | `chromosomes` | `1..22` | Inclusive range or comma-separated list |
 | `input_pfile` | unset | Existing QCed PLINK 2 prefix; bypasses VCF preprocessing |
+| `input_pgs_pfile` | unset | Already prepared PGS prefix; bypasses preparation and cannot be combined with `input_pfile` |
+| `prepare_pgs` | `false` | Prepare a reusable scoring fileset without requiring weights |
+| `plink_publish_mode` | `copy` | Publication mode for prepared PLINK outputs; `link` requires the same filesystem |
 | `input_pvar_format` | `auto` | Input metadata suffix: `auto`, `pvar`, or `pvar.zst` |
 | `cohort` | `cohort` | Output prefix |
 | `genome_build` | `GRCh38` | Cohort genome build; must match the PCA reference |
@@ -297,3 +300,57 @@ are currently one VCF per chromosome.
 
 Dataset-specific preparation, including G2MH WGS/GSA harmonization, is upstream
 of this workflow. A pipeline run receives one coherent cohort dataset.
+
+### Prepare a reusable PGS fileset without scoring
+
+Use the merged base PLINK prefix to prepare the scoring view independently of
+weights. The existing rsID mapping/extraction and `--maf` policy are unchanged:
+
+```bash
+nextflow run main.nf --input_pfile /data/base/cohort \
+  --prepare_pgs true --run_scores false --run_summary_qc false \
+  --score_rsid_map /resources/grch38-autosomes-rsid.map \
+  --maf 0.01 --outdir results/prepared
+```
+
+`04_score_input/score_input.{pgen,pvar.zst,psam}` is the reusable artifact.
+The prefix remains `score_input` for compatibility; PVAR output now uses native
+PLINK `--make-pgen vzs`. The directory also contains the filter summary,
+preparation provenance (source input, build, MAF, map path, container), and the
+rsID-map SHA-256. A plain PVAR metadata view is kept only in task work for reports.
+The named workflow emits the fileset as `pgs_pfile` and retains `score_pfile` as
+an alias, including when scoring is disabled.
+
+Later, score new weights without repeating preparation:
+
+```bash
+nextflow run main.nf \
+  --input_pgs_pfile results/prepared/04_score_input/score_input \
+  --run_scores true --score_sheet scores.tsv --run_summary_qc false \
+  --outdir results/scored
+```
+
+`--input_pgs_pfile` accepts plain or compressed PVAR using the existing
+`--input_pvar_format auto|pvar|pvar.zst` selection. It uses the prepared fileset
+as-is: it does not apply `--maf` again or rename variants. The scoring-match
+report is relative to this prepared input; it cannot explain variants removed
+from the original base in an earlier run. Preserve the preparation reports.
+Existing `--input_pfile ... --run_scores true` runs still prepare and score.
+With both `--prepare_pgs` and `--run_scores` false, preparation remains disabled.
+
+Preparation does not enable PCA or summary QC. Those remain separate settings
+(`run_pca=false`, `run_summary_qc=true` by default); disable summary QC explicitly
+for a preparation-only run. PCA requires the base input, not a previously
+filtered scoring view. The workflow rejects both input prefixes together and
+rejects preparation, rsID remapping, VCF input, or PCA with `--input_pgs_pfile`.
+
+Prepared outputs use `--plink_publish_mode copy` by default. Use `link` for
+hardlink publication when task work and results share a filesystem; no silent
+copy fallback is applied. `symlink` and `rellink` are also supported, but these
+outputs depend on retaining the work directory. No published prepared fileset
+is recopied when supplied via `--input_pgs_pfile`.
+
+Regression harness: `tests/integration/prepare_pgs.sh REPO TEST_ROOT CONFIG`
+runs real Nextflow and PLINK on 120 synthetic samples and 20 variants. Run it in
+a compute allocation with the pinned PLINK container and a small local-executor
+Nextflow config; it writes `validation.json` after checking all cases.
