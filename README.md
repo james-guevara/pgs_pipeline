@@ -252,7 +252,7 @@ Apptainer/Singularity systems, a site config may instead point
 | `sample_miss` | `0.05` | Sample missingness threshold |
 | `run_scores` | `false` | Run PLINK2 scoring branch |
 | `score_rsid_map` | unset | Optional two-column coordinate-ID to rsID map applied only to the PGS scoring view |
-| `run_summary_qc` | `true` | Generate cohort-wide missingness, HWE, and frequency summaries; set false for repeated scoring-only runs |
+| `run_summary_qc` | `true` | Generate missingness, HWE, and frequency summaries on the PGS fileset prepared/supplied in this invocation, otherwise on the base; set false to skip |
 | `min_score_variant_match` | `0.50` | Fail a trait when fewer than this fraction of weight variants are scored |
 | `warn_score_variant_match` | `0.80` | Flag a trait QC row below this match fraction |
 | `run_pca` | `false` | Run reference validation, harmonization, global projection, and ancestry assignment |
@@ -354,3 +354,24 @@ Regression harness: `tests/integration/prepare_pgs.sh REPO TEST_ROOT CONFIG`
 runs real Nextflow and PLINK on 120 synthetic samples and 20 variants. Run it in
 a compute allocation with the pinned PLINK container and a small local-executor
 Nextflow config; it writes `validation.json` after checking all cases.
+
+### Summary QC follows this invocation's fileset
+
+With `--run_summary_qc true`, preparation (explicit `--prepare_pgs true` or
+implied by `--run_scores true`) routes summary QC to the prepared PGS fileset.
+Explicit `--input_pgs_pfile` also routes QC to that supplied PGS fileset without
+preparing it again. When neither preparation nor prepared input is requested,
+QC uses the base fileset. Existing files under the output directory never select
+the target; later runs must explicitly provide `--input_pgs_pfile` to reuse PGS data.
+
+Reports are published under `04_summary/pgs/` or `04_summary/base/`, replacing the
+former flat `04_summary/` layout. Each folder contains missingness, HWE, allele
+frequency, and count reports plus `qc_provenance.json`, recording `target`, the
+input prefix and fileset paths, and genome build. For newly prepared data the
+input prefix identifies the task output used by QC. The reusable workflow emits
+`summary_qc` and `summary_qc_provenance` channels as well.
+
+QC is descriptive and adds no filters or acceptance gate. QC and scoring may run
+concurrently after preparation, while PCA remains connected to the base. For
+preparation-only runs use `--run_scores false --run_pca false`; these explicit
+flags also avoid the integrated repository's different defaults.

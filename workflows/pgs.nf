@@ -238,46 +238,53 @@ process MISSINGNESS_QC {
 }
 
 process SUMMARY_QC {
-    tag params.cohort
+    tag "${params.cohort}:${qc_target}"
     label 'large'
-    publishDir "${params.outdir}/04_summary", mode: 'copy'
+    publishDir { "${params.outdir}/04_summary/${qc_target}" }, mode: 'copy'
 
     input:
-    tuple path(pgen), path(pvar), path(psam)
+    tuple val(qc_target), val(qc_source), path(pgen), path(pvar), path(psam)
 
     output:
-    path "${params.cohort}.*"
-    path 'summary_counts.txt'
+    path "${params.cohort}.*", emit: reports
+    path 'summary_counts.txt', emit: counts
+    path 'qc_provenance.json', emit: provenance
 
     script:
     def inputPrefix = pgen.baseName
     def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
+    def provenance = groovy.json.JsonOutput.toJson(qc_source + [target:qc_target, genome_build:params.genome_build])
     """
     plink2 --pfile ${inputPrefix} ${vzs} --missing --hardy --freq \
       --out ${params.cohort} --threads ${task.cpus} --memory ${memMb}
     printf 'Metric\\tCount\\nSamples\\t%s\\nVariants\\t%s\\n' \
       "${'$'}(awk 'END {print NR-1}' ${params.cohort}.smiss)" \
       "${'$'}(awk 'END {print NR-1}' ${params.cohort}.vmiss)" > summary_counts.txt
+    cat > qc_provenance.json <<'JSON'
+    ${provenance}
+    JSON
     """
 }
 
 process SUMMARY_QC_DIRECT {
-    tag params.cohort
+    tag "${params.cohort}:${qc_target}"
     label 'large'
-    publishDir "${params.outdir}/04_summary", mode: 'copy'
+    publishDir { "${params.outdir}/04_summary/${qc_target}" }, mode: 'copy'
 
     input:
-    tuple val(pgen), val(pvar), val(psam)
+    tuple val(qc_target), val(qc_source), val(pgen), val(pvar), val(psam)
 
     output:
-    path "${params.cohort}.*"
-    path 'summary_counts.txt'
+    path "${params.cohort}.*", emit: reports
+    path 'summary_counts.txt', emit: counts
+    path 'qc_provenance.json', emit: provenance
 
     script:
     def inputPrefix = pgen.toString().replaceFirst(/[.]pgen$/, '')
     def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
+    def provenance = groovy.json.JsonOutput.toJson(qc_source + [target:qc_target, genome_build:params.genome_build])
     """
     test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
     plink2 --pfile '${inputPrefix}' ${vzs} --missing --hardy --freq \
@@ -285,6 +292,9 @@ process SUMMARY_QC_DIRECT {
     printf 'Metric\\tCount\\nSamples\\t%s\\nVariants\\t%s\\n' \
       "${'$'}(awk 'END {print NR-1}' ${params.cohort}.smiss)" \
       "${'$'}(awk 'END {print NR-1}' ${params.cohort}.vmiss)" > summary_counts.txt
+    cat > qc_provenance.json <<'JSON'
+    ${provenance}
+    JSON
     """
 }
 
@@ -860,6 +870,8 @@ workflow PGS_WORKFLOW {
     def ancestryResults = Channel.empty()
     def withinAncestryResults = Channel.empty()
     def combinedScoreResults = Channel.empty()
+    def summaryQcResults = Channel.empty()
+    def summaryQcProvenance = Channel.empty()
     def scoreInputResults = Channel.empty()
     def scoreInputSummaryResults = Channel.empty()
     def analysisDatasetResults = Channel.empty()
@@ -954,14 +966,6 @@ workflow PGS_WORKFLOW {
 
     if (pcaEnabled || scoresEnabled || preparationEnabled) {
         READ_PVAR_METADATA(qcPfile.map { pgen, pvar, psam -> pvar })
-    }
-
-    if (summaryQcEnabled) {
-        if (directPfileEnabled) {
-            SUMMARY_QC_DIRECT(qcPfile)
-        } else {
-            SUMMARY_QC(qcPfile)
-        }
     }
 
     if (pcaEnabled) {
@@ -1067,6 +1071,27 @@ workflow PGS_WORKFLOW {
         if (scoresEnabled) preparedMetadata = READ_PVAR_METADATA.out.pvar
     }
 
+    // Select only from this invocation's channels, never from published files.
+    if (summaryQcEnabled) {
+        def qcTarget = preparationEnabled || preparedInput ? 'pgs' : 'base'
+        def summaryPfile = qcTarget == 'pgs' ? scorePfile : qcPfile
+        summaryInputs = summaryPfile.map { pgen, pvar, psam ->
+            def source = [input_prefix:pgen.toString().replaceFirst(/[.]pgen$/, ''),
+                pgen:pgen.toString(), pvar:pvar.toString(), psam:psam.toString()]
+            tuple(qcTarget, source, pgen, pvar, psam)
+        }
+        // Newly prepared files are normal task outputs, even with direct base input.
+        if (directPfileEnabled && !preparationEnabled) {
+            SUMMARY_QC_DIRECT(summaryInputs)
+            summaryQcResults = SUMMARY_QC_DIRECT.out.reports.mix(SUMMARY_QC_DIRECT.out.counts)
+            summaryQcProvenance = SUMMARY_QC_DIRECT.out.provenance
+        } else {
+            SUMMARY_QC(summaryInputs)
+            summaryQcResults = SUMMARY_QC.out.reports.mix(SUMMARY_QC.out.counts)
+            summaryQcProvenance = SUMMARY_QC.out.provenance
+        }
+    }
+
     if (scoresEnabled) {
         weights = Channel.fromPath(params.score_sheet, checkIfExists: true)
             .splitCsv(header: true, sep: '\t', strip: true)
@@ -1127,6 +1152,8 @@ workflow PGS_WORKFLOW {
     }
 
     emit:
+    summary_qc = summaryQcResults
+    summary_qc_provenance = summaryQcProvenance
     qc_pfile = qcPfile
     score_pfile = scoreInputResults
     pgs_pfile = scoreInputResults
