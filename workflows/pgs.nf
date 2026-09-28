@@ -254,16 +254,20 @@ process SUMMARY_QC {
     def inputPrefix = pgen.baseName
     def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
-    def provenance = groovy.json.JsonOutput.toJson(qc_source + [target:qc_target, genome_build:params.genome_build])
+    def provenance = groovy.json.JsonOutput.toJson(qc_source + [
+        target:qc_target, qc_target:qc_target, cohort:params.cohort,
+        genome_build:params.genome_build
+    ]).replaceFirst(/}$/, ',').bytes.encodeBase64().toString()
     """
     plink2 --pfile ${inputPrefix} ${vzs} --missing --hardy --freq \
       --out ${params.cohort} --threads ${task.cpus} --memory ${memMb}
     printf 'Metric\\tCount\\nSamples\\t%s\\nVariants\\t%s\\n' \
       "${'$'}(awk 'END {print NR-1}' ${params.cohort}.smiss)" \
       "${'$'}(awk 'END {print NR-1}' ${params.cohort}.vmiss)" > summary_counts.txt
-    cat > qc_provenance.json <<'JSON'
-    ${provenance}
-    JSON
+    printf '%s' '${provenance}' | base64 -d > qc_provenance.json
+    printf '"sample_count":%s,"variant_count":%s}\\n' \
+      "${'$'}(awk 'END {print NR-1}' ${params.cohort}.smiss)" \
+      "${'$'}(awk 'END {print NR-1}' ${params.cohort}.vmiss)" >> qc_provenance.json
     """
 }
 
@@ -284,7 +288,10 @@ process SUMMARY_QC_DIRECT {
     def inputPrefix = pgen.toString().replaceFirst(/[.]pgen$/, '')
     def vzs = pvar.toString().endsWith('.pvar.zst') ? 'vzs' : ''
     def memMb = Math.max(1000, task.memory.toMega() - 2000)
-    def provenance = groovy.json.JsonOutput.toJson(qc_source + [target:qc_target, genome_build:params.genome_build])
+    def provenance = groovy.json.JsonOutput.toJson(qc_source + [
+        target:qc_target, qc_target:qc_target, cohort:params.cohort,
+        genome_build:params.genome_build
+    ]).replaceFirst(/}$/, ',').bytes.encodeBase64().toString()
     """
     test -r '${pgen}' && test -r '${pvar}' && test -r '${psam}'
     plink2 --pfile '${inputPrefix}' ${vzs} --missing --hardy --freq \
@@ -292,9 +299,10 @@ process SUMMARY_QC_DIRECT {
     printf 'Metric\\tCount\\nSamples\\t%s\\nVariants\\t%s\\n' \
       "${'$'}(awk 'END {print NR-1}' ${params.cohort}.smiss)" \
       "${'$'}(awk 'END {print NR-1}' ${params.cohort}.vmiss)" > summary_counts.txt
-    cat > qc_provenance.json <<'JSON'
-    ${provenance}
-    JSON
+    printf '%s' '${provenance}' | base64 -d > qc_provenance.json
+    printf '"sample_count":%s,"variant_count":%s}\\n' \
+      "${'$'}(awk 'END {print NR-1}' ${params.cohort}.smiss)" \
+      "${'$'}(awk 'END {print NR-1}' ${params.cohort}.vmiss)" >> qc_provenance.json
     """
 }
 
@@ -1077,7 +1085,13 @@ workflow PGS_WORKFLOW {
         def summaryPfile = qcTarget == 'pgs' ? scorePfile : qcPfile
         summaryInputs = summaryPfile.map { pgen, pvar, psam ->
             def source = [input_prefix:pgen.toString().replaceFirst(/[.]pgen$/, ''),
-                pgen:pgen.toString(), pvar:pvar.toString(), psam:psam.toString()]
+                pgen:pgen.toString(), pvar:pvar.toString(), psam:psam.toString(),
+                preparation: preparationEnabled ? [
+                    source_input: params.input_pfile ?: params.vcfs,
+                    maf_threshold: params.maf, rsid_map: params.score_rsid_map ?: null
+                ] : null]
+            // Supplied PGS preparation settings are unknown; never infer them
+            // from current defaults or discover sidecars on the filesystem.
             tuple(qcTarget, source, pgen, pvar, psam)
         }
         // Newly prepared files are normal task outputs, even with direct base input.

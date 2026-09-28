@@ -366,9 +366,14 @@ the target; later runs must explicitly provide `--input_pgs_pfile` to reuse PGS 
 
 Reports are published under `04_summary/pgs/` or `04_summary/base/`, replacing the
 former flat `04_summary/` layout. Each folder contains missingness, HWE, allele
-frequency, and count reports plus `qc_provenance.json`, recording `target`, the
-input prefix and fileset paths, and genome build. For newly prepared data the
-input prefix identifies the task output used by QC. The reusable workflow emits
+frequency, and count reports plus `qc_provenance.json`, recording `qc_target`
+(and the compatible `target` alias), cohort, genome build, input prefix/fileset
+paths, and numeric `sample_count` and `variant_count` from the QC reports.
+For newly prepared data the input prefix identifies the task output used by QC,
+and `preparation` records the upstream source, MAF threshold, and rsID-map path
+(or null when no map was requested). For supplied PGS input, `preparation` is
+null: its historical settings are unknown and are never inferred from current
+parameter defaults or discovered sidecars. The reusable workflow emits
 `summary_qc` and `summary_qc_provenance` channels as well.
 
 QC is descriptive and adds no filters or acceptance gate. QC and scoring may run

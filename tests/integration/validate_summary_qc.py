@@ -21,6 +21,15 @@ for case in cases:
     assert counts['Samples'] == '120' and counts['Variants'] == ('20' if target == 'base' else '18'), case
     provenance = json.loads((folder/'qc_provenance.json').read_text())
     assert provenance['target'] == target and provenance['genome_build'] == 'GRCh38', case
+    assert provenance['qc_target'] == target and provenance['cohort'] == 'fixture', case
+    assert provenance['sample_count'] == int(counts['Samples']), case
+    assert provenance['variant_count'] == int(counts['Variants']), case
+    if case.startswith(('qc_prepare', 'qc_both')):
+        assert provenance['preparation'] == dict(
+            source_input=str(root/'fixture/base'), maf_threshold=0.01,
+            rsid_map=str(root/'fixture/rsid.map')), case
+    else:
+        assert provenance['preparation'] is None, case
     assert provenance['input_prefix'].endswith('/base' if target == 'base' else '/score_input'), case
     assert provenance['pvar'].endswith('.pvar.zst'), case
     for ext in ['smiss', 'vmiss', 'hardy', 'afreq']:
