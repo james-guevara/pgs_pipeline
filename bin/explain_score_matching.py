@@ -12,15 +12,39 @@ def rows(path):
         yield from csv.reader(handle, delimiter="\t")
 
 
-def pvar(path):
+def pvar(path, requested):
     variants = {}
     for row in rows(path):
         if not row or row[0].startswith("##"):
             continue
         if row[0].startswith("#"):
             continue
-        variants[row[2]] = (row[3].upper(), row[4].upper())
+        if row[2] in requested:
+            variants[row[2]] = (row[3].upper(), row[4].upper())
     return variants
+
+
+def relevant_mapping(path, requested):
+    """Keep only mappings affecting requested IDs, preserving last-key-wins."""
+    old_to_new = {}
+    mapped_rsids = set()
+    remapped_requested = set()
+    map_present = False
+    with Path(path).open() as handle:
+        for line in handle:
+            row = line.split()
+            if len(row) < 2 or row[0].startswith("#"):
+                continue
+            old, new = row[:2]
+            map_present = True
+            if old in requested:
+                remapped_requested.add(old)
+            if new in requested:
+                old_to_new[old] = new
+                mapped_rsids.add(new)
+            else:
+                old_to_new.pop(old, None)
+    return old_to_new, mapped_rsids, remapped_requested, map_present
 
 
 def main():
@@ -37,64 +61,65 @@ def main():
     parser.add_argument("--details", required=True)
     args = parser.parse_args()
 
-    old_to_new = {}
-    mapped_rsids = set()
-    for row in rows(args.rsid_map):
-        if len(row) >= 2 and not row[0].startswith("#"):
-            old_to_new[row[0]] = row[1]
-            mapped_rsids.add(row[1])
-
-    source = pvar(args.source_pvar)
-    normalized_source = {old_to_new.get(variant_id, variant_id): alleles for variant_id, alleles in source.items()}
-    scoring = pvar(args.score_pvar)
-    matched = {row[0] for row in rows(args.matched_vars) if row}
-
-    weight_rows = list(rows(args.weights))
-    header = weight_rows[0]
-    requested = weight_rows[1:]
     id_index = args.id_col - 1
     allele_index = args.allele_col - 1
+    # Count requested IDs, rather than storing the full weight rows.
+    weight_rows = rows(args.weights)
+    next(weight_rows)
+    seen = Counter(row[id_index] for row in weight_rows)
+    requested = set(seen)
+    old_to_new, mapped_rsids, remapped_requested, map_present = relevant_mapping(
+        args.rsid_map, requested
+    )
+    normalized_source = set()
+    for row in rows(args.source_pvar):
+        if not row or row[0].startswith("#"):
+            continue
+        variant_id = row[2]
+        if variant_id in old_to_new:
+            normalized_source.add(old_to_new[variant_id])
+        elif variant_id in requested and variant_id not in remapped_requested:
+            normalized_source.add(variant_id)
+    scoring = pvar(args.score_pvar, requested)
+    matched = {row[0] for row in rows(args.matched_vars) if row and row[0] in requested}
     counts = Counter()
-    details = []
-    seen = Counter(row[id_index] for row in requested)
-
-    for row in requested:
-        variant_id = row[id_index]
-        effect_allele = row[allele_index].upper()
-        if variant_id in matched:
-            category = "matched"
-        elif variant_id in scoring:
-            ref, alt = scoring[variant_id]
-            if effect_allele not in {ref, alt}:
-                category = "effect_allele_incompatible"
+    with Path(args.details).open("w", newline="") as handle:
+        writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
+        writer.writerow(["trait", "variant_id", "effect_allele", "category", "weight_rows_for_id"])
+        weight_rows = rows(args.weights)
+        next(weight_rows)
+        for row in weight_rows:
+            variant_id = row[id_index]
+            effect_allele = row[allele_index].upper()
+            if variant_id in matched:
+                category = "matched"
+            elif variant_id in scoring:
+                ref, alt = scoring[variant_id]
+                if effect_allele not in {ref, alt}:
+                    category = "effect_allele_incompatible"
+                else:
+                    category = "present_but_not_scored_other"
+            elif variant_id in normalized_source:
+                category = (
+                    "removed_by_score_view_maf"
+                    if not map_present or variant_id in mapped_rsids
+                    else "source_present_without_selected_mapping"
+                )
+            elif variant_id in mapped_rsids:
+                category = "absent_from_harmonized_source"
             else:
-                category = "present_but_not_scored_other"
-        elif variant_id in normalized_source:
-            category = (
-                "removed_by_score_view_maf"
-                if not mapped_rsids or variant_id in mapped_rsids
-                else "source_present_without_selected_mapping"
-            )
-        elif variant_id in mapped_rsids:
-            category = "absent_from_harmonized_source"
-        else:
-            category = "no_selected_rsid_mapping_or_absent"
-        counts[category] += 1
-        if category != "matched":
-            details.append((variant_id, effect_allele, category, seen[variant_id]))
+                category = "no_selected_rsid_mapping_or_absent"
+            counts[category] += 1
+            if category != "matched":
+                writer.writerow([args.trait, variant_id, effect_allele, category, seen[variant_id]])
 
     with Path(args.summary).open("w", newline="") as handle:
         writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
         writer.writerow(["trait", "category", "variants"])
         for category in sorted(counts):
             writer.writerow([args.trait, category, counts[category]])
-        writer.writerow([args.trait, "requested_total", len(requested)])
+        writer.writerow([args.trait, "requested_total", sum(seen.values())])
 
-    with Path(args.details).open("w", newline="") as handle:
-        writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
-        writer.writerow(["trait", "variant_id", "effect_allele", "category", "weight_rows_for_id"])
-        for variant_id, effect_allele, category, duplicates in details:
-            writer.writerow([args.trait, variant_id, effect_allele, category, duplicates])
 
 
 if __name__ == "__main__":

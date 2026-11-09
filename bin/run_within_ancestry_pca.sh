@@ -63,7 +63,7 @@ for ancestry in AFR AMR EAS EUR SAS; do
         print "#FID\tIID"
         next
       }
-      ($psam_iid_col in wanted) { print $fid_col "\t" $psam_iid_col }
+      ($psam_iid_col in wanted) { print (fid_col ? $fid_col : "0") "\t" $psam_iid_col }
     ' "$ancestry_tsv" "${pfile}.psam" > "$keep_file"
     assigned=$(( $(wc -l < "$keep_file") - 1 ))
 

@@ -259,7 +259,7 @@ Apptainer/Singularity systems, a site config may instead point
 | `pca_reference_sheet` | unset | One-row reference artifact manifest; see `examples/pca_reference.tsv` |
 | `num_pcs` | `10` | Number of global reference PCs to project |
 | `num_within_ancestry_pcs` | `10` | Maximum PCs calculated within each ancestry group |
-| `min_pca_variant_overlap` | `0.90` | Minimum usable fraction of the fixed PCA panel |
+| `min_pca_variant_overlap` | `0.90` | Warning threshold for the usable fraction of the fixed PCA panel; low overlap does not stop projection |
 | `min_ancestry_samples` | `50` | Reliability threshold for within-ancestry PCA; smaller computable groups are flagged unreliable |
 | `within_ancestry_king_cutoff` | `0.0884` | KING relatedness cutoff for the unrelated PCA training subset |
 | `within_ancestry_ld_window` | `200` | LD-pruning window size in variants |

@@ -3,6 +3,7 @@
 
 import argparse
 import csv
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -10,7 +11,8 @@ from pathlib import Path
 COMPLEMENT = str.maketrans("ACGT", "TGCA")
 
 
-def read_pvar(path):
+def read_pvar(path, loci=None):
+    """Stream rows, retaining only requested loci when a panel is supplied."""
     with path.open() as handle:
         for line in handle:
             if line.startswith("#CHROM"):
@@ -18,13 +20,14 @@ def read_pvar(path):
                 break
         else:
             raise ValueError(f"No #CHROM header in {path}")
-        rows = []
+        chrom_col = fields.index("CHROM")
+        pos_col = fields.index("POS")
         for line in handle:
             if not line.strip():
                 continue
             values = line.rstrip().split("\t")
-            rows.append(dict(zip(fields, values)))
-    return rows
+            if loci is None or (values[chrom_col], values[pos_col]) in loci:
+                yield dict(zip(fields, values))
 
 
 def classify(panel, cohort_rows):
@@ -64,8 +67,9 @@ def main():
     if not panel_rows or not required.issubset(panel_rows[0]):
         raise ValueError("Panel must contain CHROM, POS, ID, REF, and ALT")
 
+    panel_loci = {(row["CHROM"], row["POS"]) for row in panel_rows}
     cohort_by_locus = defaultdict(list)
-    for row in read_pvar(args.cohort_pvar):
+    for row in read_pvar(args.cohort_pvar, panel_loci):
         cohort_by_locus[(row["CHROM"], row["POS"])].append(row)
 
     audit_rows = []
@@ -118,13 +122,19 @@ def main():
         writer.writerow(["panel_variants", len(panel_rows)])
         writer.writerow(["usable_variants", len(usable)])
         writer.writerow(["usable_fraction", f"{overlap:.8f}"])
-        writer.writerow(["minimum_usable_fraction", args.min_overlap])
+        writer.writerow(["minimum_usable_fraction", args.min_overlap])  # Legacy report key.
+        writer.writerow(["overlap_policy", "warn"])
+        writer.writerow(["low_overlap_warning", str(overlap < args.min_overlap).lower()])
         for status in sorted(counts):
             writer.writerow([f"status_{status}", counts[status]])
 
+    if not usable:
+        raise SystemExit("PCA panel has zero usable markers; projection cannot proceed")
     if overlap < args.min_overlap:
-        raise SystemExit(
-            f"PCA panel overlap {overlap:.4f} is below required {args.min_overlap:.4f}"
+        print(
+            f"WARNING: PCA panel overlap {overlap:.4f} is below warning threshold "
+            f"{args.min_overlap:.4f}; proceeding with {len(usable)} usable markers",
+            file=sys.stderr,
         )
 
 
