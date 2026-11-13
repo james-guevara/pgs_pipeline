@@ -15,3 +15,22 @@ def test_keep_list_uses_optional_fid(tmp_path,header,row,expected):
     psam=tmp_path/'test.psam';psam.write_text(header+'\n'+row+'\n')
     result=subprocess.check_output(['awk','-F','\t','-v','ancestry=EUR',awk,str(assignments),str(psam)],text=True)
     assert result=='#FID\tIID\n'+expected+'\n'
+
+
+def test_rejects_unknown_genotype_mode(tmp_path):
+    args = ['in', 'a.tsv', '50', '10', '0.0884', '200', '50', '0.2', '0.01', '1', '1000', str(tmp_path / 'out'), '', 'probabilistic']
+    result = subprocess.run(['bash', str(SCRIPT), *args], capture_output=True, text=True)
+    assert result.returncode == 2 and 'Invalid genotype mode' in result.stderr
+    assert not (tmp_path / 'out').exists()
+
+
+def test_hardcall_mode_erases_dosages_once_and_cleans_up():
+    text = SCRIPT.read_text()
+    block = text.split('if [[ $genotype_mode == hardcall ]]; then', 1)[1].split('\nfi\n', 1)[0]
+    assert '--make-pgen vzs erase-dosage' in block
+    assert 'trap' in block and 'rm -f' in block
+    assert 'pfile_args=("$pfile" vzs)' in block
+    # conversion happens before the per-ancestry loop, so it runs once
+    assert text.index('erase-dosage') < text.index('for ancestry in AFR AMR EAS EUR SAS; do')
+    # the hard-call copy is written outside the published output directory
+    assert 'hardcall_prefix=$PWD/' in block

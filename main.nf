@@ -38,6 +38,7 @@ params.within_ancestry_ld_window = 200
 params.within_ancestry_ld_step = 50
 params.within_ancestry_ld_r2 = 0.2
 params.within_ancestry_maf = 0.01
+params.within_ancestry_genotypes = 'dosage'
 params.python_container = 'python:3.11.16-bookworm'
 params.fsx_direct = false
 params.direct_inputs = false

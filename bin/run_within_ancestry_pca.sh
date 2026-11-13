@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 12 && $# -ne 13 ]]; then
-    echo "usage: $0 PFILE ANCESTRY_TSV MIN_SAMPLES NUM_PCS KING_CUTOFF LD_WINDOW LD_STEP LD_R2 MAF CPUS MEMORY_MB OUTPUT_DIR [vzs]" >&2
+if [[ $# -lt 12 || $# -gt 14 ]]; then
+    echo "usage: $0 PFILE ANCESTRY_TSV MIN_SAMPLES NUM_PCS KING_CUTOFF LD_WINDOW LD_STEP LD_R2 MAF CPUS MEMORY_MB OUTPUT_DIR [vzs] [dosage|hardcall]" >&2
     exit 2
 fi
 
@@ -19,14 +19,35 @@ cpus=${10}
 memory_mb=${11}
 output_dir=${12}
 pfile_args=("$pfile")
-if [[ $# -eq 13 ]]; then
+if [[ $# -ge 13 ]]; then
     [[ -z ${13} || ${13} == vzs ]] || { echo 'Invalid PVAR modifier' >&2; exit 2; }
     [[ -z ${13} ]] || pfile_args+=(vzs)
 elif [[ -f ${pfile}.pvar.zst && ! -f ${pfile}.pvar ]]; then
     pfile_args+=(vzs)
 fi
+genotype_mode=${14:-dosage}
+[[ $genotype_mode == dosage || $genotype_mode == hardcall ]] || { echo 'Invalid genotype mode' >&2; exit 2; }
 
 mkdir -p "$output_dir"
+if [[ $genotype_mode == hardcall ]]; then
+    # Every group runs five PLINK passes over the input. Imputed-dosage PGENs are
+    # several times larger than hard calls (GSA v1 imputed: 327 GB), so
+    # write one hard-call copy (erase-dosage keeps the stored hard calls, i.e.
+    # PLINK's --hard-call-threshold at import) and run all passes on it.
+    # Variants and samples are unchanged; hard-call inputs give identical
+    # results. The copy lives in
+    # the task directory, outside the published output, and is removed on exit.
+    hardcall_prefix=$PWD/within_ancestry_hardcall_input
+    trap 'rm -f "$hardcall_prefix".pgen "$hardcall_prefix".pvar.zst "$hardcall_prefix".psam "$hardcall_prefix".log' EXIT
+    plink2 \
+      --pfile "${pfile_args[@]}" \
+      --make-pgen vzs erase-dosage \
+      --out "$hardcall_prefix" \
+      --threads "$cpus" \
+      --memory "$memory_mb"
+    pfile=$hardcall_prefix
+    pfile_args=("$pfile" vzs)
+fi
 status_file="$output_dir/status.tsv"
 printf 'ancestry\tassigned_samples\tunrelated_training_samples\tpruned_variants\tpcs\tstatus\treliability\treason\n' > "$status_file"
 
