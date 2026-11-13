@@ -823,7 +823,8 @@ process WITHIN_ANCESTRY_PCA {
       ${task.cpus} \
       ${memMb} \
       within_ancestry \
-      '${vzs}'
+      '${vzs}' \
+      '${params.within_ancestry_genotypes}'
     """
 }
 
@@ -859,7 +860,8 @@ process WITHIN_ANCESTRY_PCA_DIRECT {
       ${task.cpus} \
       ${memMb} \
       within_ancestry \
-      '${vzs}'
+      '${vzs}' \
+      '${params.within_ancestry_genotypes}'
     """
 }
 

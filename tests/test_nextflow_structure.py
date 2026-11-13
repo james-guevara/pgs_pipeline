@@ -111,6 +111,11 @@ class NextflowStructureTest(unittest.TestCase):
         self.assertIn('if (( unrelated < min_samples || unrelated < 50 )); then', within)
         main = (ROOT / "main.nf").read_text()
         self.assertIn("params.within_ancestry_maf = 0.01", main)
+        self.assertIn("params.within_ancestry_genotypes = 'dosage'", main)
+        pgs = (ROOT / "workflows" / "pgs.nf").read_text()
+        for process_name in ("WITHIN_ANCESTRY_PCA", "WITHIN_ANCESTRY_PCA_DIRECT"):
+            block = pgs.split(f"process {process_name} {{", 1)[1].split("\nprocess ", 1)[0]
+            self.assertIn("'${params.within_ancestry_genotypes}'", block)
         self.assertIn('"${pfile}.psam" > "$keep_file"', within)
         self.assertIn('name == "ALT_CTS"', within)
         self.assertIn('name == "OBS_CT"', within)

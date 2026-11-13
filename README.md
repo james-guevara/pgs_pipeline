@@ -265,6 +265,7 @@ Apptainer/Singularity systems, a site config may instead point
 | `within_ancestry_ld_window` | `200` | LD-pruning window size in variants |
 | `within_ancestry_ld_step` | `50` | LD-pruning step size in variants |
 | `within_ancestry_ld_r2` | `0.2` | LD-pruning r-squared threshold |
+| `within_ancestry_genotypes` | `dosage` | `hardcall` runs within-ancestry PCA on a hard-call copy of the input (dosages erased once, up front). Use for imputed-dosage PGENs, where every PCA pass otherwise reads the full dosage file; hard-call inputs give identical results either way |
 | `r2` / `aq` | unset | Optional VCF INFO filter; R2 takes precedence |
 | `vcf_dosage_field` | unset | Optional VCF FORMAT dosage field (for example `DS`) preserved during PLINK import |
 | `base_maf` | unset | Optional MAF filter during reusable VCF import; independent of the PGS scoring-view `maf` |
